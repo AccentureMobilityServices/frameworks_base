@@ -23,6 +23,8 @@ struct AttribPointer {
  	GLuint  	normalized; //don't want byte sized values for data sending - so replace GLboolean with GLuint
  	GLsizei  	stride;
  	const GLvoid *pointer;
+	int lastSentCount;
+	unsigned int lastSentCrc32;
 	bool		enabled;
 };
 };

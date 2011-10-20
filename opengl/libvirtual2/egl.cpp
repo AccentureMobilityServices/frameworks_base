@@ -51,6 +51,7 @@
 
 #include "gles2_emulator_constants.h"
 #include "AttribPointer.h"
+#include "commands.h"
 
 #undef NELEM
 #define NELEM(x) (sizeof(x)/sizeof(*(x)))
@@ -600,14 +601,13 @@ void egl_window_surface_v2_t::copyBlt(
 
 EGLBoolean egl_window_surface_v2_t::swapBuffers()
 {
-	static unsigned char theSync[] = {0x22, 0xF3, 0x03, 0x47,		// Magic number.
-										0x12, 0x00, 0x00, 0x00,				// Command data length.
-										0x03, 0x00, 0x00, 0x00,				// Command (3 = EGL 1.4).
-										0xff, 0xff, 0xff, 0xff,				// Sequence Number
-										0x03, 0x00, 0x00, 0x00,				// Subcommand (3 = SYNC).
-										0x22, 0x33, 0x44, 0x55,				// Surface counter (overwritten with counter).
-										0x88, 0x99, 0xAA, 0xBB};			// Surface enumerator (buffer number), overwritten.
+   	char theSync[64];
 
+	int offset = 0;
+	int length = sizeof(GLuint) *2;
+	command_control cmd;
+	createEGLCommand(EGL_SYNC, length, cmd);
+ 
     if (!buffer) {
         return setError(EGL_BAD_ACCESS, EGL_FALSE);
     }
@@ -627,16 +627,14 @@ EGLBoolean egl_window_surface_v2_t::swapBuffers()
 			SetSurfaceparam(f->theVirtualDeviceFileDescriptor, f->surfaceCounter, buffer->width, buffer->height, (uint32_t)phyaddr, 0, 0, 0, 0, buffer->stride);
 		    LOGV ("Sent surface details of surface: %d\n", f->surfaceCounter);
 		}
-
-		// Send sync signal with surface count for this context.
-		*(uint32_t *)(theSync + 20) = f->surfaceCounter;
-		*(uint32_t *)(theSync + 24) = f->surfaceCounter;
-		*(uint32_t *)(theSync + 24) &= 1;				// Flip between 0 and 1;
-		fwrite(&theSync, 1, 28, f->theVirtualDeviceFileDescriptor);
+		int surfaceNum = f->surfaceCounter & 1; // flip between 0 and 1
+		writeData(theSync, offset, &cmd,sizeof(command_control));
+		writeData(theSync, offset, &f->surfaceCounter,sizeof(GLuint));
+		writeData(theSync, offset, &surfaceNum,sizeof(GLuint));
+		sendCommand(theSync, offset);
 
 		fflush(f->theVirtualDeviceFileDescriptor);
-		ioctl(f->theVirtualDeviceIOCTLDescriptor, 60, f->surfaceCounter);
-//		fsync(f->theVirtualDeviceDescriptor);
+		ioctl(f->theVirtualDeviceIOCTLDescriptor, VIRTUALDEVICE_IOCTL_SIGNAL_BUFFER_SYNC, f->surfaceCounter);
 		f->surfaceCounter++;						// For the time being just toggle it.
 
 	}
@@ -754,39 +752,25 @@ EGLBoolean egl_window_surface_v2_t::convertPixelParam(int pixelFormat,int* pixfo
 
 EGLBoolean egl_window_surface_v2_t::SetSurfaceparam(FILE* fd, int32_t surfaceEnumerator, int32_t width, int32_t height, uint32_t physicalAddr, uint32_t virtualAddr, int32_t pid, uint32_t pixelFormat, uint32_t pixelType, uint32_t stride)
 {
-	static unsigned char theSurface[] = {0x22, 0xF3, 0x03, 0x47,		// Magic number.
-										40, 0x00, 0x00, 0x00,				// Command data length.
-										0x03, 0x00, 0x00, 0x00,				// Command (3 = EGL 1.4).
-										0xff, 0xff, 0xff, 0xff,				// Sequence Number
-										0x01, 0x00, 0x00, 0x00,				// Subcommand (1 = Surface parameter descriptor).
-										0xFF, 0xFF, 0xFF, 0xFF,				// Surface enumerator.
-										0x22, 0x33, 0x44, 0x55,				// PID of owner process.
-										0x22, 0x33, 0x44, 0x55,				// Surface physical address.
-										0x22, 0x33, 0x44, 0x55,				// Surface virtual address.
-										0x22, 0x33, 0x44, 0x55,				// Width in pixels.
-										0x22, 0x33, 0x44, 0x55,				// Height in pixels.
-										0x22, 0x33, 0x44, 0x55,				// Surface pixel format.
-										0x88, 0x99, 0xAA, 0xBB,				// Surface pixel type.  
-										0x00, 0x00, 0x00, 0x00};			// Stride.
+	char theSurface[128];
+	command_control cmd;
+	createEGLCommand(EGL_SURFACE, 9* sizeof(GLuint), cmd);
 
-/*selva added for sending Surface parameters to the Host-Start */
-     if(fd)
-       {
-                LOGV("Selva::SetSurfaceparam... \n");
-
-			*(uint32_t *)(theSurface + 20) = surfaceEnumerator;
-			*(uint32_t *)(theSurface + 24) = pid;
-			*(uint32_t *)(theSurface + 28) = physicalAddr;
-			*(uint32_t *)(theSurface + 32) = virtualAddr;
-			*(uint32_t *)(theSurface + 36) = width;
-			*(uint32_t *)(theSurface + 40) = height;
-			*(uint32_t *)(theSurface + 44) = pixelFormat;
-			*(uint32_t *)(theSurface + 48) = pixelType;
-			*(uint32_t *)(theSurface + 52) = stride;
-			fwrite(&theSurface, 1, 56, fd);
-      }
-       
- return EGL_TRUE;
+	int offset = 0;
+	writeData(theSurface, offset, &cmd, sizeof(command_control));
+	writeUint32(theSurface, offset, surfaceEnumerator);
+	writeUint32(theSurface, offset, pid);
+	writeUint32(theSurface, offset, physicalAddr);
+	writeUint32(theSurface, offset, virtualAddr);
+	writeUint32(theSurface, offset, width);
+	writeUint32(theSurface, offset, height);
+	writeUint32(theSurface, offset, pixelFormat);
+	writeUint32(theSurface, offset, pixelType);
+	writeUint32(theSurface, offset, stride);
+	sendCommand(theSurface, offset);
+	   
+	return EGL_TRUE;
+	
 }
 
 /*IDC_GLES2 end*/
@@ -1897,12 +1881,20 @@ EGLContext eglCreateContext(EGLDisplay dpy, EGLConfig config,
     if (!gl) return setError(EGL_BAD_ALLOC, EGL_NO_CONTEXT);
 
     egl_context_t* c = static_cast<egl_context_t*>(gl->rasterizer.base);
-	libvirtual_init(c);
+	
     c->flags = egl_context_t::NEVER_CURRENT;
     c->dpy = dpy;
     c->config = config;
     c->read = 0;
     c->draw = 0;
+    c->gl_client_version = 1; // default GLES 1
+    while (attrib_list && attrib_list[0]) {
+        if (attrib_list[0] == EGL_CONTEXT_CLIENT_VERSION)  c->gl_client_version = attrib_list[1];
+        attrib_list+=2;
+    }
+
+    libvirtual_init(c);
+    
    LOGV("GLES2 return valid context\n");
     return (EGLContext)gl;
 }
@@ -2382,7 +2374,9 @@ int nextSequence() {
 }
 
 void libvirtual_init(egl_context_t* c)
-	{
+{
+	c->theVirtualDeviceFileDescriptor = 0;
+	if (c->gl_client_version == 2) {
 		// initialise structure to 0s
 		c->attribs = (AttribPointer*)calloc(MAX_ATTRIBS, sizeof(AttribPointer)); 
 		LOGV ("[libEGL->VirtualGL] Opening device %s ", theVirtualDeviceFilename);
@@ -2401,9 +2395,6 @@ void libvirtual_init(egl_context_t* c)
 		{
 			LOGV ("[libEGL->VirtualGL] Ok!\n");
 			c->theVirtualDeviceIOCTLDescriptor = fileno (c->theVirtualDeviceIOCTLFileDescriptor);
-			/* Reset host. */
-			ioctl(c->theVirtualDeviceIOCTLDescriptor, VIRTUALDEVICE_IOCTL_SYSTEM_RESET, 1);
-			//              fprintf (theVirtualDeviceFileDescriptor, "[LIBGL:%s] ", __FUNCTION__);
 		} else {
 			LOGV ("[libEGL->VirtualGL] Could not open device.  Not ready/loaded?  Poop.\n");
 		}
@@ -2411,20 +2402,31 @@ void libvirtual_init(egl_context_t* c)
 		c->token = 0;
 		c->seq =0;
 		c->surfaceCounter = 0;
-
-
 	}
 
-	void libvirtual_uninit(egl_context_t* c)
-	{
+}
+
+void libvirtual_uninit(egl_context_t* c)
+{
+	if (c->gl_client_version == 2) {
+		// now send message to host to inform host context has been destroyed
+		// no payload as only information we need is the context id which is in the 
+		// header
+		LOGD("LIBVIRTUAL UNINIT\n");
+		command_control cmd;
+		// use the variation that we pass in the context, as it is no longer available from the
+		// thread local context
+		createEGLCommand(c, EGL_DESTROYCONTEXT, 0, cmd);
+		sendCommand(c, (char*)&cmd, sizeof(command_control));
+		fflush(c->theVirtualDeviceFileDescriptor);
+		ioctl(c->theVirtualDeviceIOCTLDescriptor, VIRTUALDEVICE_IOCTL_SIGNAL_BUFFER_SYNC, c->surfaceCounter);
 
 		if (c->theVirtualDeviceIOCTLFileDescriptor)
 		{ 
 			/* Reset host. */
-			ioctl(c->theVirtualDeviceIOCTLDescriptor, VIRTUALDEVICE_IOCTL_SYSTEM_RESET, 1);
+			//ioctl(c->theVirtualDeviceIOCTLDescriptor, VIRTUALDEVICE_IOCTL_SYSTEM_RESET, 1);
 		}
 
-		/* ++ Jose: Virtual device test. ++ */
 		if (c->theVirtualDeviceFileDescriptor)
 		{ 
 			fclose (c->theVirtualDeviceFileDescriptor);
@@ -2436,6 +2438,5 @@ void libvirtual_init(egl_context_t* c)
 			c->theVirtualDeviceIOCTLFileDescriptor = NULL;
 		}
 
-		/* -- Jose: Virtual device test. -- */
 	}
-
+}

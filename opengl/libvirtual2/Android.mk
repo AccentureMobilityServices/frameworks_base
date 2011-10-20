@@ -8,6 +8,7 @@ include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES:= \
 	egl.cpp                     \
+	commands.cpp				\
 	../libagl/state.cpp		            \
 	../libagl/texture.cpp		            \
     ../libagl/Tokenizer.cpp               \
@@ -61,6 +62,8 @@ include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES:= \
 	gl2.cpp		            \
+	crc32.c				\
+	commands.cpp		\
 
 LOCAL_CFLAGS += -DLOG_TAG=\"libvirtual2\"
 LOCAL_CFLAGS += -DGL_GLEXT_PROTOTYPES -DEGL_EGLEXT_PROTOTYPES

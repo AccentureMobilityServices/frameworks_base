@@ -25,8 +25,12 @@
 #include <EGL/eglext.h>
 #include "egl_context.h"
 #include "AttribPointer.h"
+extern "C" {
+#include "crc32.h"
+}
 
 #include "gles2_emulator_constants.h"
+#include "commands.h"
 /* ++ Jose: Virtual device test. ++ */
 // TODO: proper 32-bit assignments.
 const int MAX_COMMAND_SIZE=256;
@@ -61,37 +65,7 @@ namespace android {
 		;
 
 
-	// --------
-	egl_context_t* getContext() 
-	{
-		ogles_context_t* c = ogles_context_t::get();
-		LOGV("egl context %08x\n",c);
-		return egl_context_t::context(c);
-	}
 
-	void createGLES2Command(int glFunction, int length, command_control& cmd) {
-		egl_context_t* c = getContext();
-
-		cmd.virtualDeviceMagicNumber = GLES2_DEVICE_HEADER;
-		cmd.length = length; 
-		cmd.command = GLES20;
-		cmd.sequenceNum = c->nextSequence();
-		cmd.glFunction = glFunction;
-
-	}
-
-	void writeData(char* buffer, int& offset, const void* ptr, int size) {
-		memcpy(buffer+offset, ptr, size);
-		offset+=size;
-	}
-
-	int pad32bit(int length){
-		return ((length+3)>>2)<<2;
-	}
-
-	int pad32strlen(const char* str) {
-		return pad32bit(strlen(str));
-	}
 
 	int getDataSize(GLenum type) 
 	{
@@ -170,30 +144,6 @@ namespace android {
 				break;
 			default:
 				break;
-		}
-	}
-
-
-	int sendCommand(const char* buffer, int size)
-	{
-		egl_context_t* c = getContext();
-		if (c->theVirtualDeviceFileDescriptor) {
-			return fwrite(buffer, 1, size, c->theVirtualDeviceFileDescriptor);
-		} else {
-			LOGV("ERROR\n");
-			return -1;
-		}	
-	}
-	int sendCommandDataWithHeader(const void* header, int headerSize, const void* data, int dataSize)
-	{
-		egl_context_t* c = getContext();
-		if (c->theVirtualDeviceFileDescriptor) {
-			int err = fwrite(header, 1, pad32bit(headerSize), c->theVirtualDeviceFileDescriptor);
-				err = fwrite(data, 1, pad32bit(dataSize), c->theVirtualDeviceFileDescriptor);
-			return err;
-		} else {
-			LOGV("ERROR\n");
-			return -1;
 		}
 	}
 
@@ -367,23 +317,53 @@ void sendVertexAttribData(int first, int count)
 			LOGV("sendVertexAttribData len %d\n", len);
 			GLint length = count * len;
 			LOGV("sendVertexAttribData count %d length %d\n", count, length);
-			int payloadSize = sizeof(GLuint)*2+sizeof(GLint)+sizeof(GLenum)+sizeof(GLuint)+sizeof(GLsizei)+pad32bit(length);
-			createGLES2Command(GLVERTEXATTRIBPOINTER, payloadSize, cmd);
-			int bufferSize = payloadSize + sizeof(command_control);
-			LOGV("sendVertexAttribData payloadSize %d\n", payloadSize);
-			LOGV("sendVertexAttribData bufferSize %d\n", bufferSize);
-			LOGV("sendVertexAttribData pointer %08x\n", c->attribs[indx].pointer);
-			char buf[MAX_COMMAND_SIZE];
-			if (c->theVirtualDeviceFileDescriptor)
+
+			// most of the time the attribute data hasn't changed, so compare the crc with the crc of the data we last sent
+
+			bool needToSend = true;
+			unsigned int crc = 0;
+			if (c->attribs[indx].lastSentCount == length) 
 			{
-				writeData(buf, offset, &cmd,sizeof(command_control));
-				writeData(buf, offset, &indx,sizeof(GLuint));
-				writeData(buf, offset, &c->attribs[indx].size,sizeof(GLuint));
-				writeData(buf, offset, &c->attribs[indx].type,sizeof(GLenum));
-				writeData(buf, offset, &c->attribs[indx].normalized,sizeof(GLuint)); //GLboolean is a char, we want to write 32 bit words
-				writeData(buf, offset, &c->attribs[indx].stride,sizeof(GLsizei));
-				writeData(buf, offset, &length,sizeof(GLint));
-				sendCommandDataWithHeader(buf, offset, (GLvoid*)(c->attribs[indx].pointer +(len*first)), length);
+				crc = crc32((unsigned char*)c->attribs[indx].pointer, length);
+				if (c->attribs[indx].lastSentCrc32 == crc) {
+					needToSend = false;
+				}
+			}
+
+			if (needToSend) {
+				c->attribs[indx].lastSentCount = length;
+				c->attribs[indx].lastSentCrc32 = crc;	
+				// host interprets sending the data as enable too
+				int payloadSize = sizeof(GLuint)*2+sizeof(GLint)+sizeof(GLenum)+sizeof(GLuint)+sizeof(GLsizei)+pad32bit(length);
+				createGLES2Command(GLVERTEXATTRIBPOINTER, payloadSize, cmd);
+				int bufferSize = payloadSize + sizeof(command_control);
+				LOGV("sendVertexAttribData payloadSize %d\n", payloadSize);
+				LOGV("sendVertexAttribData bufferSize %d\n", bufferSize);
+				LOGV("sendVertexAttribData pointer %08x\n", c->attribs[indx].pointer);
+				char buf[MAX_COMMAND_SIZE];
+				if (c->theVirtualDeviceFileDescriptor)
+				{
+					writeData(buf, offset, &cmd,sizeof(command_control));
+					writeData(buf, offset, &indx,sizeof(GLuint));
+					writeData(buf, offset, &c->attribs[indx].size,sizeof(GLuint));
+					writeData(buf, offset, &c->attribs[indx].type,sizeof(GLenum));
+					writeData(buf, offset, &c->attribs[indx].normalized,sizeof(GLuint)); //GLboolean is a char, we want to write 32 bit words
+					writeData(buf, offset, &c->attribs[indx].stride,sizeof(GLsizei));
+					writeData(buf, offset, &length,sizeof(GLint));
+					sendCommandDataWithHeader(buf, offset, (GLvoid*)(c->attribs[indx].pointer +(len*first)), length);
+				}
+			} else {
+				// if data already on the host - just send enable
+				int payloadSize = sizeof(GLuint);
+				createGLES2Command(GLENABLEVERTEXATTRIBARRAY, payloadSize, cmd);
+				int bufferSize = payloadSize + sizeof(command_control);
+				char buf[MAX_COMMAND_SIZE];
+				if (c->theVirtualDeviceFileDescriptor)
+				{
+					writeData(buf, offset, &cmd,sizeof(command_control));
+					writeData(buf, offset, &indx,sizeof(GLuint));
+					sendCommand(buf, offset);
+				}
 			}
 		}
 	}

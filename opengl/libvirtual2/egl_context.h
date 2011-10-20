@@ -17,6 +17,8 @@
 #ifndef EGL_CONTEXT_H
 #define EGL_CONTEXT_H
 
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
 #include <private/opengles/gl_context.h>
 #include "AttribPointer.h"
 using namespace android;
@@ -32,6 +34,7 @@ struct egl_context_t {
     EGLConfig           config;
     EGLSurface          read;
     EGLSurface          draw;
+  	int gl_client_version;
 
 	/* ++ libvirtual2 additions ++ */
 	int token;
