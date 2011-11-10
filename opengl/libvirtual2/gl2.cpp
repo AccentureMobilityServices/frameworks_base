@@ -15,6 +15,7 @@
  ** limitations under the License.
  */
 
+//#define LOG_NDEBUG 0
 #include <stdlib.h>
 #include <assert.h>
 #include <sys/mman.h>
@@ -66,8 +67,7 @@ namespace android {
 
 
 
-
-	int getDataSize(GLenum type) 
+   int getDataSize(GLenum type)
 	{
 		int len = 0;
 		switch(type)
@@ -93,6 +93,31 @@ namespace android {
 				len=sizeof(GLfloat);
 				break;
 			default:
+				LOGV("Unknown pixel data format\n");
+				break;
+		}
+		return len;
+	}
+int getDataFormatSize(GLenum type)
+	{
+		int len = 0;
+		switch(type)
+		{
+			case GL_ALPHA:
+			case GL_LUMINANCE:
+				len=1;
+				break;
+			case GL_LUMINANCE_ALPHA:
+				len=2;
+				break;
+			case GL_RGB:
+				len=3;
+				break;
+			case GL_RGBA:
+				len=4;
+				break;
+			default:
+				LOGV("Unknown pixel format\n");
 				break;
 		}
 		return len;
@@ -100,10 +125,10 @@ namespace android {
 
 	template <class T>
 		void findMinMaxIndex(const T* indices, int count, int* min, int* max) {
-			for (int i=0;i<count;i++) 
+			for (int i=0;i<count;i++)
 			{
 				T val = *indices++;
-				if ((int)val<*min) 
+				if ((int)val<*min)
 				{
 					*min = val;
 				}
@@ -117,7 +142,7 @@ namespace android {
 
 		}
 
-	void getMinMaxIndex(GLenum type, const GLvoid* indices, int count, int* min, int* max) 
+	void getMinMaxIndex(GLenum type, const GLvoid* indices, int count, int* min, int* max)
 	{
 		int len = 0;
 		*min = 1000000;
@@ -151,7 +176,7 @@ namespace android {
 	{
 		if (c->error == GL_NO_ERROR)
 			c->error = error;
-	}	
+	}
 }
 
 using namespace android;
@@ -159,21 +184,12 @@ GLuint glCreateProgram()
 {
 	LOGV("glCreateProgram command \n");
 	command_control cmd;
-
 	egl_context_t* c = getContext();
-	GLuint token = c->nextToken();  
-
 	int offset = 0;
-	createGLES2Command(GLCREATEPROGRAM, sizeof(GLuint), cmd);
-
+	createGLES2Command(GLCREATEPROGRAM, cmd);
 	char buf[MAX_COMMAND_SIZE];
-	if (c->theVirtualDeviceFileDescriptor)
-	{
-		writeData(buf, offset, &cmd,sizeof(command_control));
-		writeData(buf, offset, &token,sizeof(GLuint));
-		sendCommand(buf, offset);
-	}
-	return token;
+	writeData(buf, offset, &cmd,sizeof(command_control));
+	return sendCommandSync(buf, offset);
 }
 
 GLuint glCreateShader( GLenum type)
@@ -182,26 +198,17 @@ GLuint glCreateShader( GLenum type)
 	LOGV("libvirtualGLES2 glCreateShader command comes !!!\n");
 	command_control cmd;
 	egl_context_t* c = getContext();
-	GLuint token = c->nextToken();  
-	LOGV("libvirtualGLES2 glCreateShader  token %d\n", token);
 	int offset = 0;
-	createGLES2Command(GLCREATESHADER, sizeof(GLenum)+sizeof(GLuint), cmd);
+	createGLES2Command(GLCREATESHADER, cmd);
 	char buf[MAX_COMMAND_SIZE];
-	if (c->theVirtualDeviceFileDescriptor)
-	{
-		writeData(buf, offset, &cmd,sizeof(command_control));
-		writeData(buf, offset, &type,sizeof(GLenum));
-		writeData(buf, offset, &token,sizeof(GLuint));
-		sendCommand(buf, offset);	
-	}
-	LOGV("libvirtualGLES2 glCreateShader  exit\n");
-	return token;
-
+	writeData(buf, offset, &cmd,sizeof(command_control));
+	writeData(buf, offset, &type,sizeof(GLenum));
+	return sendCommandSync(buf, offset);
 }
 
-void glShaderSource(GLuint shader, GLsizei count, const GLchar** strings, const GLint* length) 
+void glShaderSource(GLuint shader, GLsizei count, const GLchar** strings, const GLint* length)
 {
-	LOGV("libvirtualGLES2 glShaderSource cmd \n"); 
+	LOGV("libvirtualGLES2 glShaderSource cmd \n");
 	command_control cmd;
 	egl_context_t* c = getContext();
 	int offset = 0;
@@ -218,8 +225,8 @@ void glShaderSource(GLuint shader, GLsizei count, const GLchar** strings, const 
 			LOGV("stringsize after padding %d\n", stringSize);
 		}
 	}
-	int payloadSize = sizeof(GLuint)+sizeof(GLsizei)+count*sizeof(GLint) + stringSize; 
-	createGLES2Command(GLSHADERSOURCE, payloadSize, cmd);
+	int payloadSize = sizeof(GLuint)+sizeof(GLsizei)+count*sizeof(GLint) + stringSize;
+	createGLES2Command(GLSHADERSOURCE, cmd);
 	// we don't know how big this command is so preallocate the buffer
 	int bufferSize = payloadSize+sizeof(command_control);
 	if (c->theVirtualDeviceFileDescriptor)
@@ -243,7 +250,7 @@ void glShaderSource(GLuint shader, GLsizei count, const GLchar** strings, const 
 		LOGV("buf/offset: %d %d\n",bufferSize, offset);
 		assert(offset == bufferSize);
 		LOGV("after assert\n");
-		sendCommand(buf, offset);	
+		sendCommand(buf, offset);
 		delete []buf;
 	}
 }
@@ -253,16 +260,12 @@ void glUseProgram(GLuint program)
 {
 	LOGV("libvirtualGLES2 glUseProgram command \n");
 	command_control cmd;
-	egl_context_t* c = getContext();
 	int offset = 0;
-	createGLES2Command(GLUSEPROGRAM, sizeof(GLuint), cmd);
+	createGLES2Command(GLUSEPROGRAM, cmd);
 	char buf[MAX_COMMAND_SIZE];
-	if (c->theVirtualDeviceFileDescriptor)
-	{
-		writeData(buf, offset, &cmd,sizeof(command_control));
-		writeData(buf, offset, &program,sizeof(GLuint));
-		sendCommand(buf, offset);
-	}
+	writeData(buf, offset, &cmd,sizeof(command_control));
+	writeData(buf, offset, &program,sizeof(GLuint));
+	sendCommand(buf, offset);
 }
 
 
@@ -278,8 +281,8 @@ void glVertexAttribPointer (GLuint indx, GLint size, GLenum type, GLboolean norm
 }
 
 
-// send all the data needed for the enabled attrib pointers 
-void sendVertexAttribData(int first, int count) 
+// send all the data needed for the enabled attrib pointers
+void sendVertexAttribData(int first, int count)
 {
 	GLuint indx;
 	egl_context_t* c = getContext();
@@ -289,6 +292,7 @@ void sendVertexAttribData(int first, int count)
 			command_control cmd;
 			int offset = 0;
 			int len = 0;
+
 			switch(c->attribs[indx].type)
 			{
 				case GL_BYTE:
@@ -322,9 +326,9 @@ void sendVertexAttribData(int first, int count)
 
 			bool needToSend = true;
 			unsigned int crc = 0;
-			if (c->attribs[indx].lastSentCount == length) 
+			if (c->attribs[indx].lastSentCount == length)
 			{
-				crc = crc32((unsigned char*)c->attribs[indx].pointer, length);
+				crc = calcCRC32((unsigned char*)c->attribs[indx].pointer, length);
 				if (c->attribs[indx].lastSentCrc32 == crc) {
 					needToSend = false;
 				}
@@ -332,14 +336,9 @@ void sendVertexAttribData(int first, int count)
 
 			if (needToSend) {
 				c->attribs[indx].lastSentCount = length;
-				c->attribs[indx].lastSentCrc32 = crc;	
+				c->attribs[indx].lastSentCrc32 = crc;
 				// host interprets sending the data as enable too
-				int payloadSize = sizeof(GLuint)*2+sizeof(GLint)+sizeof(GLenum)+sizeof(GLuint)+sizeof(GLsizei)+pad32bit(length);
-				createGLES2Command(GLVERTEXATTRIBPOINTER, payloadSize, cmd);
-				int bufferSize = payloadSize + sizeof(command_control);
-				LOGV("sendVertexAttribData payloadSize %d\n", payloadSize);
-				LOGV("sendVertexAttribData bufferSize %d\n", bufferSize);
-				LOGV("sendVertexAttribData pointer %08x\n", c->attribs[indx].pointer);
+				createGLES2Command(GLVERTEXATTRIBPOINTER, cmd);
 				char buf[MAX_COMMAND_SIZE];
 				if (c->theVirtualDeviceFileDescriptor)
 				{
@@ -350,13 +349,11 @@ void sendVertexAttribData(int first, int count)
 					writeData(buf, offset, &c->attribs[indx].normalized,sizeof(GLuint)); //GLboolean is a char, we want to write 32 bit words
 					writeData(buf, offset, &c->attribs[indx].stride,sizeof(GLsizei));
 					writeData(buf, offset, &length,sizeof(GLint));
-					sendCommandDataWithHeader(buf, offset, (GLvoid*)(c->attribs[indx].pointer +(len*first)), length);
+					sendCommandDataWithHeader(buf, offset, (GLvoid*)((char*)c->attribs[indx].pointer +(len*first)), length);
 				}
 			} else {
 				// if data already on the host - just send enable
-				int payloadSize = sizeof(GLuint);
-				createGLES2Command(GLENABLEVERTEXATTRIBARRAY, payloadSize, cmd);
-				int bufferSize = payloadSize + sizeof(command_control);
+				createGLES2Command(GLENABLEVERTEXATTRIBARRAY, cmd);
 				char buf[MAX_COMMAND_SIZE];
 				if (c->theVirtualDeviceFileDescriptor)
 				{
@@ -383,7 +380,7 @@ void glAttachShader(GLuint program, GLuint shader)
 	command_control cmd;
 	egl_context_t* c = getContext();
 	int offset = 0;
-	createGLES2Command(GLATTACHSHADER, sizeof(GLuint)*2, cmd);
+	createGLES2Command(GLATTACHSHADER, cmd);
 
 	char buf[MAX_COMMAND_SIZE];
 	if (c->theVirtualDeviceFileDescriptor)
@@ -400,7 +397,7 @@ void glLinkProgram(GLuint program)
 	command_control cmd;
 	egl_context_t* c = getContext();
 	int offset = 0;
-	createGLES2Command(GLLINKPROGRAM, sizeof(GLuint), cmd);
+	createGLES2Command(GLLINKPROGRAM, cmd);
 	char buf[MAX_COMMAND_SIZE];
 	if (c->theVirtualDeviceFileDescriptor)
 	{
@@ -410,22 +407,14 @@ void glLinkProgram(GLuint program)
 	}
 }
 
-void glGetProgramiv(GLuint program, GLenum pname, GLint* params)
-{
-	params[0] = GL_TRUE;
-	LOGV("libvirtualGLES2 glGetProgramiv command \n");
-}
-void glGetProgramInfoLog(GLuint program, GLsizei bufsize, GLsizei* length, GLchar* infolog)
-{
-	LOGV("libvirtualGLES2 glGetProgramInfoLog command \n");
-}
+
 void glDeleteProgram(GLuint program)
 {
 	LOGV("libvirtualGLES2 glDeleteProgram command \n");
 	egl_context_t* c = getContext();
 	int offset = 0;
 	command_control cmd;
-	createGLES2Command(GLDELETEPROGRAM, sizeof(GLuint), cmd);
+	createGLES2Command(GLDELETEPROGRAM, cmd);
 	char buf[MAX_COMMAND_SIZE];
 	if (c->theVirtualDeviceFileDescriptor)
 	{
@@ -439,24 +428,17 @@ int glGetAttribLocation(GLuint program, const GLchar* name)
 {
 	LOGV("libvirtualGLES2 glGetAttribLocation command \n");
 	command_control cmd;
-	egl_context_t* c = getContext(); 
+	egl_context_t* c = getContext();
 	GLint len=strlen(name)+1; // send the terminating null as well
-	int size = 2*sizeof(GLuint)+pad32bit(len)+sizeof(GLuint);//token remove later
 	int offset = 0;
-	GLuint token = c->nextToken();  
-	createGLES2Command(GLGETATTRIBLOCATION, size, cmd);
+	createGLES2Command(GLGETATTRIBLOCATION, cmd);
 	char buf[MAX_COMMAND_SIZE];
-	if (c->theVirtualDeviceFileDescriptor)
-	{
-		writeData(buf, offset, &cmd, sizeof(command_control));		
-		writeData(buf, offset, &program, sizeof(GLuint));
-		writeData(buf, offset, &token, sizeof(GLuint));
-		writeData(buf, offset, &len, sizeof(GLuint));
-		writeData(buf, offset, (void*)name, len);
-		offset = pad32bit(offset); // correct for non-32 bit length string
-		sendCommand(buf, offset);
-	}
-	return token;
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &program, sizeof(GLuint));
+	writeData(buf, offset, &len, sizeof(GLuint));
+	writeData(buf, offset, (void*)name, len);
+	offset = pad32bit(offset); // correct for non-32 bit length string
+	return sendCommandSync(buf, offset);
 }
 
 
@@ -464,88 +446,30 @@ void glCompileShader(GLuint shader)
 {
 	LOGV("libvirtualGLES2 glCompileShader command comes !!!\n");
 	command_control cmd;
-	egl_context_t* c = getContext(); 
+	egl_context_t* c = getContext();
 	int offset = 0;
-	createGLES2Command(GLCOMPILESHADER, sizeof(GLuint), cmd);
+	createGLES2Command(GLCOMPILESHADER, cmd);
 
 	char buf[MAX_COMMAND_SIZE];
-	if (c->theVirtualDeviceFileDescriptor)
-	{
-		writeData(buf, offset, &cmd, sizeof(command_control));
-		writeData(buf, offset, &shader, sizeof(GLuint));
-		sendCommand(buf, offset);
-	}
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &shader, sizeof(GLuint));
+	sendCommand(buf, offset);
 }
-#if 0 
-/* Implement sync mechanism between guest and host - To test*/
+
+
 void glGetShaderiv(GLuint shader, GLenum pname, GLint* params)
 {
 	LOGV("libvirtualGLES2 glGetShaderiv command comes !!!\n");
 	command_control cmd;
-	command_sync syncmsg;
-	egl_context_t* c = getContext(); 
-	int Size = sizeof(GLuint)+sizeof(GLenum);
-	int offset = 0;
-	createGLES2Command(GLGETSHADERIV, Size, cmd);
-	if (c->theVirtualDeviceFileDescriptor)
-	{
-		writeData(buf, offset, &cmd, sizeof(command_control));
-		writeData(buf, offset, &shader, sizeof(GLuint));
-		writeData(buf, offset, &pname, sizeof(GLenum));
-		fwrite(buf, 1, offset, c->theVirtualDeviceFileDescriptor);
-		//send Sync command to get the return value of the params.
-
-		syncmsg.syncflag=0x00;
-		syncmsg.commandflag=0x00;
-		syncmsg.retvalue=0x00;
-		ioctl (c->theVirtualDeviceExchangeDescriptor, 68, &syncmsg);
-		if(syncmsg.syncflag==0x01){
-			*params=syncmsg.retvalue;
-		}
-		else {
-			LOGV("Command sync error Device exchange Desc\n");
-			*params=0;
-		}
-	}    
-
-}
-#endif
-void glGetShaderiv(GLuint shader, GLenum pname, GLint* params)
-{
-	LOGV("libvirtualGLES2 glGetShaderiv command comes !!!\n");
-	command_control cmd;
-	egl_context_t* c = getContext(); 
+	egl_context_t* c = getContext();
 	int size = sizeof(GLuint)+sizeof(GLenum);
 	int offset = 0;
-	createGLES2Command(GLGETSHADERIV, size, cmd);
-
-	switch(pname)
-	{
-		case GL_COMPILE_STATUS:
-			//need to check the status of the of the compile status and return 
-			*params=GL_TRUE;
-			break;
-		case GL_INFO_LOG_LENGTH:
-			*params=0;
-			break;
-		case GL_SHADER_TYPE:
-			break;
-		case GL_DELETE_STATUS:
-			break;
-		case  GL_SHADER_SOURCE_LENGTH:
-			break;
-		default:
-			break;
-	}
+	createGLES2Command(GLGETSHADERIV, cmd);
 	char buf[MAX_COMMAND_SIZE];
-	if (c->theVirtualDeviceFileDescriptor)
-	{
-		writeData(buf, offset, &cmd, sizeof(command_control));
-		writeData(buf, offset, &shader, sizeof(GLuint));
-		writeData(buf, offset, &pname, sizeof(GLuint));
-		sendCommand(buf, offset);
-	}
-	params[0] = GL_TRUE;
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &shader, sizeof(GLuint));
+        writeData(buf, offset, &pname, sizeof(GLenum));
+	sendCommandSync(buf, offset, params, sizeof(GLint));
 
 }
 
@@ -556,7 +480,7 @@ void glUniformMatrix4fv(GLint location, GLsizei count, GLboolean transpose, cons
 	egl_context_t* c = getContext();
 	int offset = 0;
 	int len=sizeof(GLint)+sizeof(GLsizei)+sizeof(GLuint)+count*16*sizeof(GLfloat);
-	createGLES2Command(GLUNIFORMMATRIX4FV, len, cmd);
+	createGLES2Command(GLUNIFORMMATRIX4FV, cmd);
 	GLuint transVal = (GLuint) transpose; //GLboolean is byte size, which is incovenient for the parsing which assumes 32 bit word alignment
 	char buf[MAX_COMMAND_SIZE];
 	if (c->theVirtualDeviceFileDescriptor)
@@ -580,7 +504,7 @@ void glUniform3fv(GLint location, GLsizei count, const GLfloat* v)
 	egl_context_t* c = getContext();
 	int offset = 0;
 	int len=sizeof(GLint)+sizeof(GLsizei)+count*3*sizeof(GLfloat);
-	createGLES2Command(GLUNIFORM3FV, len, cmd);
+	createGLES2Command(GLUNIFORM3FV, cmd);
 	char buf[MAX_COMMAND_SIZE];
 	if (c->theVirtualDeviceFileDescriptor)
 	{
@@ -595,33 +519,23 @@ void glUniform3fv(GLint location, GLsizei count, const GLfloat* v)
 	}
 }
 
-int glGetUniformLocation(GLuint program, const GLchar* name)
+GLint glGetUniformLocation(GLuint program, const GLchar* name)
 {
 	LOGV("libvirtualGLES2 glGetUniformLocation command \n");
 	command_control cmd;
 	egl_context_t* c = getContext();
 	int offset = 0;
-	GLuint token = c->nextToken();  
 	int len=strlen(name)+1; // send terminating null in string
-	createGLES2Command(GLGETUNIFORMLOCATION,2* sizeof(GLuint)+pad32bit(len)+sizeof(GLuint), cmd);
+	createGLES2Command(GLGETUNIFORMLOCATION, cmd);
 	char buf[MAX_COMMAND_SIZE];
-	if (c->theVirtualDeviceFileDescriptor)
-	{
-		writeData(buf, offset, &cmd, sizeof(command_control));
-		writeData(buf, offset, &program, sizeof(GLuint));
-		writeData(buf, offset, &token, sizeof(GLuint));
-		writeData(buf, offset, &len, sizeof(GLuint));
-		writeData(buf, offset, (void*)name, len);
-		offset = pad32bit(offset);
-		sendCommand(buf, offset);
-	}
-	return token;
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &program, sizeof(GLuint));
+	writeData(buf, offset, &len, sizeof(GLuint));
+	writeData(buf, offset, (void*)name, len);
+	offset = pad32bit(offset);
+	return sendCommandSync(buf, offset);
 }
 
-void glGetShaderInfoLog(GLuint shader, GLsizei bufsize, GLsizei* length, GLchar* infolog)
-{
-	LOGV("libvirtualGLES2 glGetShaderInfoLog command comes !!!\n");
-}
 
 void glViewport(GLint x, GLint y, GLsizei w, GLsizei h)
 {
@@ -629,9 +543,8 @@ void glViewport(GLint x, GLint y, GLsizei w, GLsizei h)
 	command_control cmd;
 	egl_context_t* c = getContext();
 	int offset = 0;
-	createGLES2Command(GLVIEWPORT, 2*sizeof(GLuint)+2*sizeof(GLsizei), cmd);
+	createGLES2Command(GLVIEWPORT, cmd);
 	char buf[MAX_COMMAND_SIZE];
-
 	writeData(buf, offset, &cmd, sizeof(command_control));
 	writeData(buf, offset, &x, sizeof(GLint));
 	writeData(buf, offset, &y, sizeof(GLint));
@@ -644,9 +557,9 @@ void glDeleteShader(GLuint shader)
 {
 	LOGV("libvirtualGLES2 glDeleteShader command \n");
 	command_control cmd;
-	egl_context_t* c = getContext(); 
+	egl_context_t* c = getContext();
 	int offset = 0;
-	createGLES2Command(GLDELETESHADER, sizeof(GLuint), cmd);
+	createGLES2Command(GLDELETESHADER, cmd);
 	char buf[MAX_COMMAND_SIZE];
 	if (c->theVirtualDeviceFileDescriptor)
 	{
@@ -658,64 +571,133 @@ void glDeleteShader(GLuint shader)
 
 
 // These ones are super-easy, we're not supporting those features!
-void glSampleCoverage(GLclampf value, GLboolean invert) {
+void glSampleCoverage(GLclampf value, GLboolean invert)
+{
+	LOGV("GLES2 command glSampleCoverage\n");
+	command_control cmd;
+	int offset = 0;
+	GLuint invertval = (GLuint) invert; //GLboolean is byte size, which is incovenient for the parsing which assumes 32 bit word alignment
+	createGLES2Command(GLSAMPLECOVERAGE, cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &value, sizeof(GLclampf));
+	writeData(buf, offset, &invertval, sizeof(GLuint));
+	sendCommand(buf, offset);
 }
-void glSampleCoveragex(GLclampx value, GLboolean invert) {
+void glSampleCoveragex(GLclampx value, GLboolean invert)
+{
+	LOGV("GLES2 command glSampleCoveragex\n");
+	command_control cmd;
+	int offset = 0;
+	GLuint invertval = (GLuint) invert; //GLboolean is byte size, which is incovenient for the parsing which assumes 32 bit word alignment
+	createGLES2Command(GLSAMPLECOVERAGEX, cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &value, sizeof(GLclampx));
+	writeData(buf, offset, &invert, sizeof(GLuint));
+	sendCommand(buf, offset);
 }
-void glStencilFunc(GLenum func, GLint ref, GLuint mask) {
+void glStencilFunc(GLenum func, GLint ref, GLuint mask)
+{
+	LOGV("GLES2 command glSampleCoverage\n");
+	command_control cmd;
+	int offset = 0;
+	createGLES2Command(GLSTENCILFUNC, cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &func, sizeof(GLenum));
+	writeData(buf, offset, &ref, sizeof(GLint));
+	writeData(buf, offset, &mask, sizeof(GLint));
+	sendCommand(buf, offset);
 }
 
 // ----------------------------------------------------------------------------
 
 void glCullFace(GLenum mode)
 {
+	LOGV("GLES2 command glCullFace\n");
+	command_control cmd;
+	int offset = 0;
+	createGLES2Command(GLCULLFACE, cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &mode, sizeof(GLenum));
+	sendCommand(buf, offset);
 }
 
 void glFrontFace(GLenum mode)
 {
+	LOGV("GLES2 command glFrontFace\n");
+	command_control cmd;
+	int offset = 0;
+	createGLES2Command(GLFRONTFACE, cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &mode, sizeof(GLenum));
+	sendCommand(buf, offset);
 }
 
 void glHint(GLenum target, GLenum mode)
 {
+	LOGV("GLES2 command glHint\n");
+	command_control cmd;
+	int offset = 0;
+	createGLES2Command(GLHINT, cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &target, sizeof(GLenum));
+	writeData(buf, offset, &mode, sizeof(GLenum));
+	sendCommand(buf, offset);
 }
 
-void glEnable(GLenum cap) 
+void glEnable(GLenum cap)
 {
 	LOGV("GLES2 Glenable command\n");
 	command_control cmd;
 	int offset = 0;
-	createGLES2Command(GLENABLE, sizeof(GLenum), cmd);
+	createGLES2Command(GLENABLE, cmd);
 	char buf[MAX_COMMAND_SIZE];
 	writeData(buf, offset, &cmd, sizeof(command_control));
 	writeData(buf, offset, &cap, sizeof(GLenum));
-	sendCommand(buf, offset);	
+	sendCommand(buf, offset);
 }
 
-void glDisable(GLenum cap) 
+void glDisable(GLenum cap)
 {
 	LOGV("GLES2 Gldisable command\n");
 	command_control cmd;
 	int offset = 0;
-	createGLES2Command(GLDISABLE, sizeof(GLenum), cmd);
+	createGLES2Command(GLDISABLE, cmd);
 	char buf[MAX_COMMAND_SIZE];
 	writeData(buf, offset, &cmd, sizeof(command_control));
 	writeData(buf, offset, &cap, sizeof(GLenum));
-	sendCommand(buf, offset);	
+	sendCommand(buf, offset);
 }
 
 
 void glFinish()
-{ // nothing to do for our software implementation
+{
+       LOGV("GLES2  command glFinish\n");
+	command_control cmd;
+	int offset = 0;
+	createGLES2Command(GLFINISH, cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	sendCommand(buf, offset);
 }
 
 void glFlush()
-{ // nothing to do for our software implementation
+{
+       LOGV("GLES2 command glFlush\n");
+	command_control cmd;
+	int offset = 0;
+	createGLES2Command(GLFLUSH, cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	sendCommand(buf, offset);
 }
 
-GLenum glGetError()
-{
-	return GL_NO_ERROR;
-}
+
 
 const GLubyte* glGetString(GLenum string)
 {
@@ -735,7 +717,7 @@ void glClear(GLbitfield mask) {
 	command_control cmd;
 	egl_context_t* c = getContext();
 	int offset = 0;
-	createGLES2Command(GLCLEAR, sizeof(GLbitfield), cmd);
+	createGLES2Command(GLCLEAR, cmd);
 	/* ++ Jose: Virtual device test. ++ */
 	char buf[MAX_COMMAND_SIZE];
 	if (c->theVirtualDeviceFileDescriptor)
@@ -754,7 +736,7 @@ void glClearColorx(GLclampx red, GLclampx green, GLclampx blue, GLclampx alpha) 
 	egl_context_t* c = getContext();
 	command_control cmd;
 	int offset = 0;
-	createGLES2Command(GLCLEARCOLORX, 4*sizeof(GLclampx), cmd);
+	createGLES2Command(GLCLEARCOLORX, cmd);
 
 
 	char buf[MAX_COMMAND_SIZE];
@@ -778,7 +760,7 @@ void glClearColor(GLclampf r, GLclampf g, GLclampf b, GLclampf a)
 	command_control cmd;
 	egl_context_t* c = getContext();
 	int offset = 0;
-	createGLES2Command(GLCLEARCOLORF, 4*sizeof(GLclampf), cmd);
+	createGLES2Command(GLCLEARCOLORF, cmd);
 	char buf[MAX_COMMAND_SIZE];
 	if (c->theVirtualDeviceFileDescriptor)
 	{
@@ -794,6 +776,19 @@ void glClearColor(GLclampf r, GLclampf g, GLclampf b, GLclampf a)
 
 void glClearDepthx(GLclampx depth) {
 	LOGV ("virtualLIB %s ", __func__);
+	command_control cmd;
+	int glFunction = GLCLEARDEPTHX;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	createGLES2Command(GLCLEARDEPTHX, cmd);
+	char buf[MAX_COMMAND_SIZE];
+	if (c->theVirtualDeviceFileDescriptor)
+	{
+		writeData(buf, offset, &cmd, sizeof(command_control));
+		writeData(buf, offset, &depth, sizeof(GLclampf));
+		sendCommand(buf, offset);
+	}
+
 }
 
 void glClearDepthf(GLclampf depth)
@@ -803,7 +798,7 @@ void glClearDepthf(GLclampf depth)
 	int glFunction = GLCLEARDEPTHF;
 	egl_context_t* c = getContext();
 	int offset = 0;
-	createGLES2Command(GLCLEARDEPTHF, sizeof(GLclampf), cmd);
+	createGLES2Command(GLCLEARDEPTHF, cmd);
 	char buf[MAX_COMMAND_SIZE];
 	if (c->theVirtualDeviceFileDescriptor)
 	{
@@ -819,7 +814,7 @@ void glClearStencil(GLint s) {
 	command_control cmd;
 	egl_context_t* c = getContext();
 	int offset = 0;
-	createGLES2Command(GLCLEARDSTENCIL, sizeof(GLint), cmd);
+	createGLES2Command(GLCLEARDSTENCIL, cmd);
 	char buf[MAX_COMMAND_SIZE];
 	if (c->theVirtualDeviceFileDescriptor)
 	{
@@ -839,12 +834,12 @@ void glDrawArrays(GLenum mode, GLint first, GLsizei count)
 	LOGV("GLES2 glDrawArrays(2) command \n");
 	command_control cmd;
 	int offset = 0;
-	createGLES2Command(GLDRAWARRAYS, sizeof(GLenum) + sizeof(GLsizei), cmd);
+	createGLES2Command(GLDRAWARRAYS, cmd);
 	char buf[MAX_COMMAND_SIZE];
 	writeData(buf, offset, &cmd, sizeof(command_control));
 	writeData(buf, offset, &mode, sizeof(GLenum));
-	// only transfer the data count - the host will only receive data from the first index given so no need for it to know about 
-	// the index 
+	// only transfer the data count - the host will only receive data from the first index given so no need for it to know about
+	// the index
 	writeData(buf, offset, &count, sizeof(GLsizei));
 	sendCommand(buf, offset);
 }
@@ -861,9 +856,8 @@ void glDrawElements(GLenum mode, GLsizei count, GLenum type, const GLvoid *indic
 	command_control cmd;
 	int offset = 0;
 	int dataLength = pad32bit(getDataSize(type)*count);
-	int payloadSize = sizeof(GLenum) + sizeof(GLsizei) + sizeof(GLenum)+dataLength;
-	createGLES2Command(GLDRAWELEMENTS, payloadSize, cmd);
-	char buf[MAX_COMMAND_SIZE]; 
+	createGLES2Command(GLDRAWELEMENTS, cmd);
+	char buf[MAX_COMMAND_SIZE];
 	writeData(buf, offset, &cmd, sizeof(command_control));
 	writeData(buf, offset, &mode, sizeof(GLenum));
 	writeData(buf, offset, &count, sizeof(GLsizei));
@@ -871,3 +865,1748 @@ void glDrawElements(GLenum mode, GLsizei count, GLenum type, const GLvoid *indic
 	int length = getDataSize(type)*count;
 	sendCommandDataWithHeader(buf, offset, indices, dataLength);
 }
+void glBlendColor(GLclampf red, GLclampf green, GLclampf blue, GLclampf alpha)
+{
+	command_control cmd;
+	egl_context_t* c = getContext();
+        int offset = 0;
+	createGLES2Command(GLBLENDCOLOR, cmd);
+        char buf[MAX_COMMAND_SIZE];
+        writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &red, sizeof(GLclampf));
+	writeData(buf, offset, &green, sizeof(GLclampf));
+	writeData(buf, offset, &blue, sizeof(GLclampf));
+	writeData(buf, offset, &alpha, sizeof(GLclampf));
+ 	sendCommand(buf, offset);
+}
+
+void glBlendEquation( GLenum mode )
+{
+	command_control cmd;
+	egl_context_t* c = getContext();
+        int offset = 0;
+	createGLES2Command(GLBLENDEQUATION, cmd);
+        char buf[MAX_COMMAND_SIZE];
+        writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &mode, sizeof(GLenum));
+	sendCommand(buf, offset);
+}
+
+void glBlendEquationSeparate(GLenum modeRGB, GLenum modeAlpha)
+{
+	command_control cmd;
+	egl_context_t* c = getContext();
+        int offset = 0;
+	createGLES2Command(GLBLENDEQUATIONSEPARATE, cmd);
+        char buf[MAX_COMMAND_SIZE];
+        writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &modeRGB, sizeof(GLenum));
+	writeData(buf, offset, &modeAlpha, sizeof(GLenum));
+	sendCommand(buf, offset);
+}
+void glBlendFunc(GLenum sfactor, GLenum dfactor)
+{
+	command_control cmd;
+	egl_context_t* c = getContext();
+        int offset = 0;
+	createGLES2Command(GLBLENDFUNC, cmd);
+        char buf[MAX_COMMAND_SIZE];
+        writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &sfactor, sizeof(GLenum));
+	writeData(buf, offset, &dfactor, sizeof(GLenum));
+	sendCommand(buf, offset);
+}
+
+void glBlendFuncSeparate(GLenum srcRGB, GLenum dstRGB, GLenum srcAlpha, GLenum dstAlpha)
+{
+	command_control cmd;
+	egl_context_t* c = getContext();
+        int offset = 0;
+	createGLES2Command(GLBLENDFUNCSEPARATE, cmd);
+        char buf[MAX_COMMAND_SIZE];
+        writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &srcRGB, sizeof(GLenum));
+	writeData(buf, offset, &dstRGB, sizeof(GLenum));
+	writeData(buf, offset, &srcAlpha, sizeof(GLenum));
+	writeData(buf, offset, &dstAlpha, sizeof(GLenum));
+ 	sendCommand(buf, offset);
+}
+void glBindAttribLocation(GLuint program, GLuint index, const GLchar* name)
+{
+	command_control cmd;
+	egl_context_t* c = getContext();
+        int offset = 0;
+        GLint len=strlen(name)+1;
+	int size = 3*sizeof(GLuint)+pad32bit(len);
+	createGLES2Command(GLBINDATTRIBLOCATION, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &program, sizeof(GLuint));
+	writeData(buf, offset, &index, sizeof(GLuint));
+	writeData(buf, offset, &len, sizeof(GLuint));
+	writeData(buf, offset, (void*)name, len);
+	offset = pad32bit(offset);
+	sendCommand(buf, offset);
+}
+void glGenTextures(GLsizei n, GLuint* textures)
+{
+        LOGV("GLES2 glGenTextures command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+        int offset = 0;
+	createGLES2Command(GLGENTEXTURES, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &n, sizeof(GLsizei));
+	sendCommandSync(buf, offset, textures, sizeof(GLuint)*n);
+}
+
+void glActiveTexture(GLenum texture)
+{
+ 	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	createGLES2Command(GLACTIVETEXTURE, cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &texture, sizeof(GLenum));
+        sendCommand(buf, offset);
+}
+void glBindTexture(GLenum target, GLuint texture)
+{
+ 	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	createGLES2Command(GLBINDTEXTURE, cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &target, sizeof(GLenum));
+	writeData(buf, offset, &texture, sizeof(GLuint));
+        sendCommand(buf, offset);
+
+}
+void glFramebufferTexture2D(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level)
+{
+        command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	createGLES2Command(GLFRAMEBUFFERTEXTURE2D, cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &target, sizeof(GLenum));
+	writeData(buf, offset, &attachment, sizeof(GLenum));
+	writeData(buf, offset, &textarget, sizeof(GLenum));
+	writeData(buf, offset, &texture, sizeof(GLuint));
+	writeData(buf, offset, &level, sizeof(GLuint));
+        sendCommand(buf, offset);
+}
+GLboolean glIsTexture(GLuint texture)
+{
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	GLboolean retval;
+	createGLES2Command(GLISTEXTURE, cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &texture, sizeof(GLenum));
+        sendCommandSync(buf, offset, &retval, sizeof(GLboolean));
+   	return retval;
+
+}
+void glDeleteTextures(GLsizei n, const GLuint* textures)
+{
+        command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	createGLES2Command(GLDELETETEXTURES, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &n, sizeof(GLsizei));
+	for(int i=0;i<n;i++)
+	{
+		writeData(buf, offset, (void*)&textures[i], sizeof(GLuint));
+	}
+
+        sendCommand(buf, offset);
+}
+void glBufferData(GLenum target, GLsizeiptr size, const GLvoid* data, GLenum usage)
+{
+    //To-Do
+    LOGV("GLES2 glBufferData command \n");
+    command_control cmd;
+    egl_context_t* c = getContext();
+    int offset = 0;
+    createGLES2Command(GLBUFFERDATA, cmd);
+    char buf[MAX_COMMAND_SIZE];
+    writeData(buf, offset, &cmd, sizeof(command_control));
+    writeData(buf, offset, &target, sizeof(GLenum));
+    writeData(buf, offset, &size, sizeof(GLsizeiptr));
+    writeData(buf, offset, &usage, sizeof(GLenum));
+    if(size!=0){
+      sendCommandDataWithHeader(buf, offset, data, size);
+    }
+     else{
+           sendCommand(buf, offset);     
+     }
+}
+
+void glBufferSubData(GLenum target, GLintptr offset, GLsizeiptr size, const GLvoid* data)
+{
+    LOGV("GLES2 glBufferSubData command \n");
+    command_control cmd;
+    egl_context_t* c = getContext();
+    int lenoffset = 0;
+    createGLES2Command(GLBUFFERSUBDATA, cmd);
+    char buf[MAX_COMMAND_SIZE];
+    writeData(buf, lenoffset, &cmd, sizeof(command_control));
+    writeData(buf, lenoffset, &target, sizeof(GLenum));
+    writeData(buf, lenoffset, &offset, sizeof(GLintptr));
+    writeData(buf, lenoffset, &size, sizeof(GLsizeiptr));
+    if(size!=0){
+        sendCommandDataWithHeader(buf, lenoffset, data, size);
+    }
+     else{
+           sendCommand(buf, lenoffset);     
+     }
+  
+}
+
+GLenum glCheckFramebufferStatus(GLenum target)
+{
+	LOGV("GLES2 glBufferSubData command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	GLenum framebuffstatus;
+	int offset = 0;
+	createGLES2Command(GLCHECKFRAMEBUFFERSTATUS, cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+    	writeData(buf, offset, &target, sizeof(GLenum));
+	sendCommandSync(buf, offset, &framebuffstatus, sizeof(GLint));
+        return framebuffstatus;
+}
+void glBindBuffer(GLenum target, GLuint buffer)
+{
+    command_control cmd;
+    egl_context_t* c = getContext();
+    int offset = 0;
+    createGLES2Command(GLBINDBUFFER, cmd);
+    char buf[MAX_COMMAND_SIZE];
+    writeData(buf, offset, &cmd, sizeof(command_control));
+    writeData(buf, offset, &target, sizeof(GLenum));
+    writeData(buf, offset, &buffer, sizeof(GLuint));
+    sendCommand(buf, offset);
+}
+void glBindFramebuffer(GLenum target, GLuint framebuffer)
+{
+    command_control cmd;
+    egl_context_t* c = getContext();
+    int offset = 0;
+    createGLES2Command(GLBINDFRAMEBUFFER, cmd);
+    char buf[MAX_COMMAND_SIZE];
+    writeData(buf, offset, &cmd, sizeof(command_control));
+    writeData(buf, offset, &target, sizeof(GLenum));
+    writeData(buf, offset, &framebuffer, sizeof(GLuint));
+    sendCommand(buf, offset);
+}
+void glBindRenderbuffer(GLenum target, GLuint renderbuffer)
+{
+    command_control cmd;
+    egl_context_t* c = getContext();
+    int offset = 0;
+    createGLES2Command(GLBINDRENDERBUFFER, cmd);
+    char buf[MAX_COMMAND_SIZE];
+    writeData(buf, offset, &cmd, sizeof(command_control));
+    writeData(buf, offset, &target, sizeof(GLenum));
+    writeData(buf, offset, &renderbuffer, sizeof(GLuint));
+    sendCommand(buf, offset);
+}
+
+void glColorMask(GLboolean red, GLboolean green, GLboolean blue, GLboolean alpha)
+{
+    command_control cmd;
+    egl_context_t* c = getContext();
+    int offset = 0;
+    GLuint redval = (GLuint) red;
+    GLuint greenval = (GLuint) green;
+    GLuint blueval = (GLuint) blue;
+    GLuint alphaval = (GLuint) alpha;
+    createGLES2Command(GLCOLORMASK, cmd);
+    char buf[MAX_COMMAND_SIZE];
+    writeData(buf, offset, &cmd, sizeof(command_control));
+    writeData(buf, offset, &redval, sizeof(GLuint));
+    writeData(buf, offset, &greenval, sizeof(GLuint));
+    writeData(buf, offset, &blueval, sizeof(GLuint));
+    writeData(buf, offset, &alphaval, sizeof(GLuint));
+    sendCommand(buf, offset);
+}
+void glCompressedTexImage2D (GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLint border, GLsizei imageSize, const GLvoid* data)
+{
+    LOGV("GLES2 glCompressedTexImage2D command \n");
+    command_control cmd;
+    egl_context_t* c = getContext();
+    int offset = 0;
+    createGLES2Command(GLCOMPRESSEDTEXIMAGE2D, cmd);
+    char buf[MAX_COMMAND_SIZE];
+    writeData(buf, offset, &cmd, sizeof(command_control));
+    writeData(buf, offset, &target, sizeof(GLenum));
+    writeData(buf, offset, &level, sizeof(GLint));
+    writeData(buf, offset, &internalformat, sizeof(GLenum));
+    writeData(buf, offset, &width, sizeof(GLsizei));
+    writeData(buf, offset, &height, sizeof(GLsizei));
+    writeData(buf, offset, &border, sizeof(GLint));
+    writeData(buf, offset, &imageSize, sizeof(GLsizei));
+    if (imageSize>0) {
+		sendCommandDataWithHeader(buf, offset, data, imageSize);
+	} else {
+		sendCommand(buf, offset);
+       }
+}
+
+void glCompressedTexSubImage2D (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLsizei imageSize, const GLvoid* data)
+{
+   LOGV("GLES2 glCompressedTexSubImage2D command \n");
+    command_control cmd;
+    egl_context_t* c = getContext();
+    int offset = 0;
+    createGLES2Command(GLCOMPRESSEDTEXSUBIMAGE2D, cmd);
+    char buf[MAX_COMMAND_SIZE+imageSize];
+    writeData(buf, offset, &cmd, sizeof(command_control));
+    writeData(buf, offset, &target, sizeof(GLenum));
+    writeData(buf, offset, &level, sizeof(GLint));
+    writeData(buf, offset, &xoffset, sizeof(GLint));
+    writeData(buf, offset, &yoffset, sizeof(GLint));
+    writeData(buf, offset, &width, sizeof(GLsizei));
+    writeData(buf, offset, &height, sizeof(GLsizei));
+    writeData(buf, offset, &format, sizeof(GLenum));
+    writeData(buf, offset, &imageSize, sizeof(GLsizei));
+    if (imageSize>0) {
+		sendCommandDataWithHeader(buf, offset, data, imageSize);
+	} else {
+		sendCommand(buf, offset);
+       }
+}
+
+void glCopyTexImage2D(GLenum target, GLint level, GLenum internalformat, GLint x, GLint y, GLsizei width, GLsizei height, GLint border)
+{
+    command_control cmd;
+    egl_context_t* c = getContext();
+    int offset = 0;
+    int size=2*sizeof(GLenum)+2*sizeof(GLsizei)+4*sizeof(GLint);
+    createGLES2Command(GLCOPYTEXIMAGE2D, cmd);
+    char buf[MAX_COMMAND_SIZE];
+    writeData(buf, offset, &cmd, sizeof(command_control));
+    writeData(buf, offset, &target, sizeof(GLenum));
+    writeData(buf, offset, &level, sizeof(GLint));
+    writeData(buf, offset, &internalformat, sizeof(GLenum));
+    writeData(buf, offset, &x, sizeof(GLint));
+    writeData(buf, offset, &y, sizeof(GLint));
+    writeData(buf, offset, &width, sizeof(GLsizei));
+    writeData(buf, offset, &height, sizeof(GLsizei));
+    writeData(buf, offset, &border, sizeof(GLenum));
+    sendCommand(buf, offset);
+}
+void glCopyTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width, GLsizei height)
+{
+    command_control cmd;
+    egl_context_t* c = getContext();
+    int offset = 0;
+    int size=sizeof(GLenum)+2*sizeof(GLsizei)+5*sizeof(GLint);
+    createGLES2Command(GLCOPYTEXSUBIMAGE2D, cmd);
+    char buf[MAX_COMMAND_SIZE];
+    writeData(buf, offset, &cmd, sizeof(command_control));
+    writeData(buf, offset, &target, sizeof(GLenum));
+    writeData(buf, offset, &level, sizeof(GLint));
+    writeData(buf, offset, &xoffset, sizeof(GLint));
+    writeData(buf, offset, &yoffset, sizeof(GLint));
+    writeData(buf, offset, &x, sizeof(GLint));
+    writeData(buf, offset, &y, sizeof(GLint));
+    writeData(buf, offset, &width, sizeof(GLsizei));
+    writeData(buf, offset, &height, sizeof(GLsizei));
+    sendCommand(buf, offset);
+}
+void glDeleteBuffers(GLsizei n, const GLuint* buffers)
+{
+        command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	createGLES2Command(GLDELETEBUFFERS, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &n, sizeof(GLsizei));
+	for(int i=0;i<n;i++)
+	{
+		writeData(buf, offset, (void*)&buffers[i], sizeof(GLuint));
+	}
+
+        sendCommand(buf, offset);
+}
+void glDeleteFramebuffers(GLsizei n, const GLuint* framebuffers)
+{
+        command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	createGLES2Command(GLDELETEFRAMEBUFFERS, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &n, sizeof(GLsizei));
+	for(int i=0;i<n;i++)
+	{
+		writeData(buf, offset, (void*)&framebuffers[i], sizeof(GLuint));
+	}
+
+        sendCommand(buf, offset);
+}
+void glDeleteRenderbuffers(GLsizei n, const GLuint* renderbuffers)
+{
+        command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	createGLES2Command(GLDELETERENDERBUFFERS, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &n, sizeof(GLsizei));
+	for(int i=0;i<n;i++)
+	{
+		writeData(buf, offset, (void*)&renderbuffers[i], sizeof(GLuint));
+	}
+
+        sendCommand(buf, offset);
+}
+void glDepthFunc (GLenum func)
+{
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLDEPTHFUNC, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &func, sizeof(GLenum));
+	sendCommand(buf, offset);
+}
+void glDepthMask(GLboolean flag)
+{
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	GLuint flagval = (GLuint) flag;
+        createGLES2Command(GLDEPTHMASK, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &flagval, sizeof(GLuint));
+	sendCommand(buf, offset);
+}
+void glDepthRangef(GLclampf zNear, GLclampf zFar)
+{
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLDEPTHRANGEF, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &zNear, sizeof(GLclampf));
+	writeData(buf, offset, &zFar, sizeof(GLclampf));
+	sendCommand(buf, offset);
+}
+void glDetachShader(GLuint program, GLuint shader)
+{
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLDETACHSHADER, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &program, sizeof(GLuint));
+	writeData(buf, offset, &shader, sizeof(GLuint));
+	sendCommand(buf, offset);
+}
+void glDisableVertexAttribArray(GLuint index)
+{
+
+	egl_context_t* c = getContext();
+	c->attribs[index].enabled = false;
+}
+void glFramebufferRenderbuffer(GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer)
+{
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLFRAMEBUFFERRENDERBUFFER, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &target, sizeof(GLenum));
+	writeData(buf, offset, &attachment, sizeof(GLenum));
+	writeData(buf, offset, &renderbuffertarget, sizeof(GLenum));
+	writeData(buf, offset, &renderbuffer, sizeof(GLuint));
+	sendCommand(buf, offset);
+}
+
+void glGetShaderInfoLog(GLuint shader, GLsizei bufsize, GLsizei* length, GLchar* infolog)
+{
+	LOGV("libvirtualGLES2 glGetShaderInfoLog command comes !!!\n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	createGLES2Command(GLGETSHADERINFOLOG,cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &shader, sizeof(GLuint));
+	writeData(buf, offset, &bufsize, sizeof(GLsizei));
+  	GLsizei len;	
+	sendCommandSync(buf, offset, &len, sizeof(GLsizei));
+	GetReturnValue(infolog,sizeof(GLsizei),len);
+	if (length != NULL) {
+		*length = len;
+	}
+}
+
+void glGetProgramiv(GLuint program, GLenum pname, GLint* params)
+{
+
+	LOGV("libvirtualGLES2 glGetProgramiv command \n");
+     	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	createGLES2Command(GLGETPROGRAMIV,cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &program, sizeof(GLuint));
+       	writeData(buf, offset, &pname, sizeof(GLenum));
+	sendCommandSync(buf, offset, params, sizeof(GLint));
+}
+void glGetProgramInfoLog(GLuint program, GLsizei bufsize, GLsizei* length, GLchar* infolog)
+{
+	LOGV("libvirtualGLES2 glGetProgramInfoLog command \n");
+       	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        int lenflag=(length==NULL)?false:true;
+	createGLES2Command(GLGETPROGRAMINFOLOG,cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &program, sizeof(GLuint));
+       	writeData(buf, offset, &bufsize, sizeof(GLenum));
+ 	writeData(buf, offset, &lenflag, sizeof(int));
+        if(lenflag==true)
+	{
+           sendCommandSync(buf, offset, length, sizeof(GLsizei));
+           GetReturnValue(infolog,sizeof(GLsizei),(*length)+1);
+	}
+	else
+	{
+	      sendCommandSync(buf, offset,infolog,bufsize);
+        }
+}
+
+void glGenerateMipmap(GLenum target)
+{
+	LOGV("glGenerateMipmap command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLGENERATEMIPMAP, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &target, sizeof(GLenum));
+	sendCommand(buf, offset);
+}
+
+void glGenBuffers(GLsizei n, GLuint* buffers)
+{
+	LOGV("glGenBuffers command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	createGLES2Command(GLGENBUFFERS, cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &n, sizeof(GLsizei));
+	sendCommandSync(buf, offset, buffers, sizeof(GLuint)*n);
+}
+
+void glGenFramebuffers(GLsizei n, GLuint* framebuffers)
+{
+	LOGV("glGenFramebuffers command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	createGLES2Command(GLGENFRAMEBUFFERS, cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &n, sizeof(GLsizei));
+	sendCommandSync(buf, offset, framebuffers, sizeof(GLuint)*n);
+}
+void glGenRenderbuffers(GLsizei n, GLuint* renderbuffers)
+{
+	LOGV("glGenRenderbuffers command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	createGLES2Command(GLGENRENDERBUFFERS, cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &n, sizeof(GLsizei));
+	sendCommandSync(buf, offset, renderbuffers, sizeof(GLuint)*n);
+}
+GLenum glGetError()
+{
+	LOGV("glGetError command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	GLenum Errorval;
+	createGLES2Command(GLGETERROR, cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	sendCommandSync(buf, offset, &Errorval, sizeof(GLenum));
+
+//	return Errorval;
+	return GL_NO_ERROR;
+
+}
+
+void glGetActiveAttrib(GLuint program, GLuint index, GLsizei bufsize, GLsizei* length, GLint* size, GLenum* type, GLchar* name)
+{
+	LOGV("glGetActiveAttrib command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	int lenflag=(length==NULL)?false:true; //To check length field is NULL or not
+       	createGLES2Command(GLGETACTIVEATTRIB,cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &program, sizeof(GLuint));
+	writeData(buf, offset, &index, sizeof(GLuint));
+	writeData(buf, offset, &bufsize, sizeof(GLsizei));
+	writeData(buf, offset, &lenflag, sizeof(int));//pass the length to the host. Added extra field ..Host should take car
+	if(lenflag==true)
+	{
+           sendCommandSync(buf, offset, length, sizeof(GLsizei));
+           GetReturnValue((char*)size,sizeof(GLsizei),sizeof(GLint));
+           GetReturnValue((char*)type,sizeof(GLsizei)+sizeof(GLint),sizeof(GLenum));
+           GetReturnValue(name,sizeof(GLsizei)+sizeof(GLint)+sizeof(GLenum),(*length)+1);
+	}
+	else
+	{
+           sendCommandSync(buf, offset,size,sizeof(GLint));
+   	   GetReturnValue((char*)type,sizeof(GLint),sizeof(GLenum));
+           GetReturnValue(name,sizeof(GLint)+sizeof(GLenum),bufsize);
+        }
+}
+void glGetActiveUniform(GLuint program, GLuint index, GLsizei bufsize, GLsizei* length, GLint* size, GLenum* type, GLchar* name)
+{
+	LOGV("glGetActiveUniform command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	int lenflag=(length==NULL)?false:true; //To check length field is NULL or not
+       	createGLES2Command(GLGETACTIVEUNIFORM,cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &program, sizeof(GLuint));
+	writeData(buf, offset, &index, sizeof(GLuint));
+	writeData(buf, offset, &bufsize, sizeof(GLsizei));
+	writeData(buf, offset, &lenflag, sizeof(int));//pass the length to the host. Added extra field ..Host should take care
+	if(lenflag==true)
+	{
+           sendCommandSync(buf, offset, length, sizeof(GLsizei));
+           GetReturnValue((char*)size,sizeof(GLsizei),sizeof(GLint));
+           GetReturnValue((char*)type,sizeof(GLsizei)+sizeof(GLint),sizeof(GLenum));
+           GetReturnValue(name,sizeof(GLsizei)+sizeof(GLint)+sizeof(GLenum),(*length)+1);
+	}
+	else
+	{
+           sendCommandSync(buf, offset,size,sizeof(GLint));
+   	   GetReturnValue((char*)type,sizeof(GLint),sizeof(GLenum));
+           GetReturnValue(name,sizeof(GLint)+sizeof(GLenum),bufsize);
+        }
+}
+void glGetAttachedShaders(GLuint program, GLsizei maxcount, GLsizei* count, GLuint* shaders)
+{
+
+	LOGV("glGetAttachedShaders command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	createGLES2Command(GLGETATTACHEDSHADERS,cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &program, sizeof(GLuint));
+       	writeData(buf, offset, &maxcount, sizeof(GLsizei));
+        sendCommandSync(buf, offset, count, sizeof(GLsizei));
+        if(*count!=0)
+	{
+           GetReturnValue((char*)shaders,sizeof(GLsizei),*count*sizeof(GLuint));
+	}
+}
+
+void glGetBooleanv(GLenum pname, GLboolean* params)
+{
+	LOGV("glGetBooleanv command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        int paramscount;
+	createGLES2Command(GLGETBOOLEANV,cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+       	writeData(buf, offset, &pname, sizeof(GLenum));
+	sendCommandSync(buf, offset, &paramscount, sizeof(int));//pass paramscount to find how many return params available.
+	if(paramscount>0)
+	{
+           GetReturnValue((char*)params,sizeof(int),paramscount*sizeof(GLboolean));//copy the return value or values
+	}
+}
+
+void glGetBufferParameteriv(GLenum target, GLenum pname, GLint* params)
+{
+	LOGV("glGetBufferParameteriv command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        int paramscount;
+	createGLES2Command(GLGETBUFFERPARAMETERIV,cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+       	writeData(buf, offset, &pname, sizeof(GLenum));
+	sendCommandSync(buf, offset, &paramscount, sizeof(int));//pass paramscount to find how many return params available.
+	if(paramscount>0)
+	{
+           GetReturnValue((char*)params,sizeof(int),paramscount*sizeof(GLint));//copy the return value or values
+	}
+}
+
+
+void glGetFloatv(GLenum pname, GLfloat* params)
+{
+	LOGV("glGetFloatv command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        int paramscount;
+	createGLES2Command(GLGETFLOATV,cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+       	writeData(buf, offset, &pname, sizeof(GLenum));
+	sendCommandSync(buf, offset, &paramscount, sizeof(int));//pass paramscount to find how many return params available.
+	if(paramscount>0)
+	{
+           GetReturnValue((char*)params,sizeof(int),paramscount*sizeof(GLfloat));//copy the return value or values
+	}
+}
+void glGetFramebufferAttachmentParameteriv(GLenum target, GLenum attachment, GLenum pname, GLint* params)
+{
+	LOGV("glGetFramebufferAttachmentParameteriv command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	createGLES2Command(GLGETFRAMEBUFFERATTACHMENTPARAMETERIV,cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+       	writeData(buf, offset, &target, sizeof(GLenum));
+	writeData(buf, offset, &attachment, sizeof(GLenum));
+	writeData(buf, offset, &pname, sizeof(GLenum));
+	sendCommandSync(buf, offset, params, sizeof(GLint));
+}
+
+void glGetIntegerv(GLenum pname, GLint* params)
+{
+	LOGV("glGetIntegerv command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        int paramscount;
+	createGLES2Command(GLGETINTEGERRV,cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+       	writeData(buf, offset, &pname, sizeof(GLenum));
+	sendCommandSync(buf, offset, &paramscount, sizeof(int));//pass paramscount to find how many return params available.
+	if(paramscount>0)
+	{
+           GetReturnValue((char*)params,sizeof(int),paramscount*sizeof(GLint));//copy the return value or values
+	}
+}
+
+void glGetRenderbufferParameteriv(GLenum target, GLenum pname, GLint* params)
+{
+	LOGV("glGetRenderbufferParameteriv command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	createGLES2Command(GLGETRENDERBUFFERPARAMETERIV,cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+       	writeData(buf, offset, &target, sizeof(GLenum));
+	writeData(buf, offset, &pname, sizeof(GLenum));
+	sendCommandSync(buf, offset, params, sizeof(GLint));
+}
+
+void glGetShaderPrecisionFormat(GLenum shadertype, GLenum precisiontype, GLint* range, GLint* precision)
+{
+	LOGV("glGetShaderPrecisionFormat command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	createGLES2Command(GLGETSHADERPRECISIONFORMAT,cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+       	writeData(buf, offset, &shadertype, sizeof(GLenum));
+	writeData(buf, offset, &precisiontype, sizeof(GLenum));
+	sendCommandSync(buf, offset, range, 2*sizeof(GLint));
+	GetReturnValue((char*)precision,2*sizeof(GLint),sizeof(GLint));
+}
+void glGetShaderSource(GLuint shader, GLsizei bufsize, GLsizei* length, GLchar* source)
+{
+	LOGV("glGetShaderSource command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	int lenflag=(length==NULL)?false:true;
+        createGLES2Command(GLGETSHADERSOURCE,cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &shader, sizeof(GLuint));
+	writeData(buf, offset, &bufsize, sizeof(GLuint));
+	writeData(buf, offset, &lenflag, sizeof(int));
+	if(lenflag==true)
+	{
+           sendCommandSync(buf, offset, length, sizeof(GLsizei));
+           GetReturnValue(source,sizeof(GLsizei),(*length)+1);
+	}
+	else
+	{
+	  sendCommandSync(buf, offset, source, bufsize);
+        }
+}
+
+void glGetTexParameterfv(GLenum target, GLenum pname, GLfloat* params)
+{
+	return;
+	LOGV("glGetTexParameterfv command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        int paramscount;
+	createGLES2Command(GLGETTEXPARAMETERFV,cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &target, sizeof(GLenum));
+       	writeData(buf, offset, &pname, sizeof(GLenum));
+	sendCommandSync(buf, offset, &paramscount, sizeof(int));//pass paramscount to find how many return params available.
+	if(paramscount>0)
+	{
+           GetReturnValue((char*)params,sizeof(int),paramscount*sizeof(GLfloat));//copy the return value or values
+	}
+}
+
+void glGetTexParameteriv(GLenum target, GLenum pname, GLint* params)
+{
+	LOGV("glGetTexParameteriv command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        int paramscount;
+	createGLES2Command(GLGETTEXPARAMETERIV,cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &target, sizeof(GLenum));
+       	writeData(buf, offset, &pname, sizeof(GLenum));
+	sendCommandSync(buf, offset, &paramscount, sizeof(int));//pass paramscount to find how many return params available.
+	if(paramscount>0)
+	{
+           GetReturnValue((char*)params,sizeof(int),paramscount*sizeof(GLint));//copy the return value or values
+	}
+}
+
+void glGetUniformfv(GLuint program, GLint location, GLfloat* params)
+{
+	LOGV("glGetUniformfv command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        int paramscount;
+	createGLES2Command(GLGETUNIFORMFV,cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &program, sizeof(GLuint));
+       	writeData(buf, offset, &location, sizeof(GLint));
+	sendCommandSync(buf, offset, &paramscount, sizeof(int));//pass paramscount to find how many return params available.
+	if(paramscount>0)
+	{
+           GetReturnValue((char*)params,sizeof(int),paramscount*sizeof(GLfloat));//copy the return value or values
+	}
+}
+void glGetUniformiv(GLuint program, GLint location, GLint* params)
+{
+	LOGV("glGetUniformiv command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        int paramscount;
+	createGLES2Command(GLGETUNIFORMIV,cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &program, sizeof(GLuint));
+       	writeData(buf, offset, &location, sizeof(GLint));
+	sendCommandSync(buf, offset, &paramscount, sizeof(int));//pass paramscount to find how many return params available.
+	if(paramscount>0)
+	{
+           GetReturnValue((char*)params,sizeof(int),paramscount*sizeof(GLint));//copy the return value or values
+	}
+}
+
+void glGetVertexAttribfv(GLuint index, GLenum pname, GLfloat* params)
+{
+	LOGV("glGetVertexAttribfv command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        int paramscount;
+        createGLES2Command(GLGETVERTEXATTRIBFV,cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &index, sizeof(GLuint));
+       	writeData(buf, offset, &pname, sizeof(GLenum));
+	sendCommandSync(buf, offset, &paramscount, sizeof(int));//pass paramscount to find how many return params available.
+	if(paramscount>0)
+	{
+           GetReturnValue((char*)params,sizeof(int),paramscount*sizeof(GLfloat));//copy the return value or values
+	}
+}
+void glGetVertexAttribiv(GLuint index, GLenum pname, GLint* params)
+{
+	LOGV("glGetVertexAttribiv command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        int paramscount;
+       	createGLES2Command(GLGETVERTEXATTRIBIV,cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &index, sizeof(GLuint));
+       	writeData(buf, offset, &pname, sizeof(GLenum));
+	sendCommandSync(buf, offset, &paramscount, sizeof(int));//pass paramscount to find how many return params available.
+	if(paramscount>0)
+	{
+           GetReturnValue((char*)params,sizeof(int),paramscount*sizeof(GLint));//copy the return value or values
+	}
+}
+void glGetVertexAttribPointerv(GLuint index, GLenum pname, GLvoid** pointer)
+{
+ 	 LOGV("glGetVertexAttribPointerv command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLGETVERTEXATTRIBPOINTERRV,cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &index, sizeof(GLuint));
+       	writeData(buf, offset, &pname, sizeof(GLenum));
+	sendCommandSync(buf, offset, *pointer, sizeof(int));//pass paramscount to find how many return params available.
+}
+
+GLboolean glIsBuffer(GLuint buffer)
+{
+	LOGV("glIsBuffer command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        GLboolean retval;
+        createGLES2Command(GLISBUFFER, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &buffer, sizeof(GLuint));
+	sendCommandSync(buf, offset, &retval, sizeof(GLboolean));
+        return retval;
+}
+GLboolean glIsEnabled(GLenum cap)
+{
+        LOGV("glIsEnabled command \n");
+    	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	GLboolean retval;
+        createGLES2Command(GLISENABLED, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &cap, sizeof(GLenum));
+	sendCommandSync(buf, offset, &retval, sizeof(GLboolean));
+        return retval;
+}
+
+GLboolean glIsFramebuffer(GLuint framebuffer)
+{
+        LOGV("glIsFramebuffer command \n");
+        command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        GLboolean retval;
+        createGLES2Command(GLISFRAMEBUFFER, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &framebuffer, sizeof(GLuint));
+	sendCommandSync(buf, offset, &retval, sizeof(GLboolean));
+        return retval;
+
+}
+GLboolean glIsProgram(GLuint program)
+{
+        LOGV("glIsProgram command \n");
+        command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        GLboolean retval;
+        createGLES2Command(GLISPROGRAM, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &program, sizeof(GLuint));
+	sendCommandSync(buf, offset, &retval, sizeof(GLboolean));
+        return retval;
+
+}
+GLboolean glIsRenderbuffer(GLuint renderbuffer)
+{
+        LOGV("glIsRenderbuffer command \n");
+        command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        GLboolean retval;
+        createGLES2Command(GLISRENDERBUFFER, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &renderbuffer, sizeof(GLuint));
+	sendCommandSync(buf, offset, &retval, sizeof(GLboolean));
+        return retval;
+}
+GLboolean glIsShader(GLuint shader)
+{
+        LOGV("glIsShader command \n");
+        command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	GLboolean retval;
+        createGLES2Command(GLISSHADER, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &shader, sizeof(GLuint));
+	sendCommandSync(buf, offset, &retval, sizeof(GLboolean));
+        return retval;
+}
+
+void glLineWidth(GLfloat width)
+{
+        LOGV("glLineWidth command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLLINEWIDTH, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &width, sizeof(GLfloat));
+	sendCommand(buf, offset);
+}
+
+void glPixelStorei(GLenum pname, GLint param)
+{
+       LOGV("glPixelStorei command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLPIXELSTOREI, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &pname, sizeof(GLenum));
+	writeData(buf, offset, &param, sizeof(GLint));
+	sendCommand(buf, offset);
+}
+void glPolygonOffset(GLfloat factor, GLfloat units)
+{
+        LOGV("glPolygonOffset command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLPOLYGONOFFSET, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &factor, sizeof(GLfloat));
+	writeData(buf, offset, &units, sizeof(GLfloat));
+	sendCommand(buf, offset);
+
+}
+
+void glReleaseShaderCompiler(void)
+{
+        LOGV("glReleaseShaderCompiler command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLRELEASESHADERCOMPILER, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	sendCommand(buf, offset);
+}
+void glRenderbufferStorage(GLenum target, GLenum internalformat, GLsizei width, GLsizei height)
+{
+        LOGV("glRenderbufferStorage command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLRENDERBUFFERSTORAGE, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &target, sizeof(GLenum));
+	writeData(buf, offset, &internalformat, sizeof(GLenum));
+	writeData(buf, offset, &width, sizeof(GLsizei));
+	writeData(buf, offset, &height, sizeof(GLsizei));
+	sendCommand(buf, offset);
+}
+
+void glScissor(GLint x, GLint y, GLsizei width, GLsizei height)
+{
+        LOGV("glScissor command \n");
+ 	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLSCISSOR, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &x, sizeof(GLint));
+	writeData(buf, offset, &y, sizeof(GLint));
+	writeData(buf, offset, &width, sizeof(GLsizei));
+	writeData(buf, offset, &height, sizeof(GLsizei));
+	sendCommand(buf, offset);
+}
+void glShaderBinary(GLsizei n, const GLuint* shaders, GLenum binaryformat, const GLvoid* binary, GLsizei length)
+{
+       LOGV("glShaderBinary command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        GLuint shaderlen=n*sizeof(GLuint);
+        createGLES2Command(GLSHADERBINARY, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &n, sizeof(GLsizei));
+	writeData(buf, offset, &shaderlen, sizeof(GLuint));
+	writeData(buf, offset, (void*)shaders, shaderlen);
+	writeData(buf, offset, &binaryformat, sizeof(GLenum));
+	writeData(buf, offset, &length, sizeof(GLsizei)); //length should be passed before the data.
+	writeData(buf, offset, (void*)binary, length);
+	offset=pad32bit(offset);
+	sendCommand(buf, offset);
+}
+
+void glStencilFuncSeparate(GLenum face, GLenum func, GLint ref, GLuint mask)
+{
+       LOGV("glStencilFuncSeparate command \n");
+ 	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLSTENCILFUNCSEPARATE, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &face, sizeof(GLenum));
+	writeData(buf, offset, &func, sizeof(GLenum));
+	writeData(buf, offset, &ref, sizeof(GLint));
+	writeData(buf, offset, &mask, sizeof(GLuint));
+	sendCommand(buf, offset);
+}
+void glStencilMask(GLuint mask)
+{
+        LOGV("glStencilMask command \n");
+ 	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLSTENCILMASK, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &mask, sizeof(GLint));
+	sendCommand(buf, offset);
+}
+void glStencilMaskSeparate(GLenum face, GLuint mask)
+{
+          LOGV("glStencilMaskSeparate command \n");
+ 	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLSTENCILMASKSEPARATE, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &face, sizeof(GLenum));
+	writeData(buf, offset, &mask, sizeof(GLuint));
+	sendCommand(buf, offset);
+}
+void glStencilOp(GLenum fail, GLenum zfail, GLenum zpass)
+{
+        LOGV("glStencilOp command \n");
+ 	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLSTENCILOP, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &fail, sizeof(GLenum));
+	writeData(buf, offset, &zfail, sizeof(GLenum));
+	writeData(buf, offset, &zpass, sizeof(GLenum));
+	sendCommand(buf, offset);
+}
+void glStencilOpSeparate(GLenum face, GLenum fail, GLenum zfail, GLenum zpass)
+{
+        LOGV("glStencilOpSeparate command \n");
+ 	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLSTENCILOPSEPARATE, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &face, sizeof(GLenum));
+	writeData(buf, offset, &fail, sizeof(GLenum));
+	writeData(buf, offset, &zfail, sizeof(GLenum));
+	writeData(buf, offset, &zpass, sizeof(GLenum));
+	sendCommand(buf, offset);
+}
+
+void glTexParameterf(GLenum target, GLenum pname, GLfloat param)
+{
+        LOGV("glTexParameterf command \n");
+ 	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLTEXPARAMETERF, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &target, sizeof(GLenum));
+	writeData(buf, offset, &pname, sizeof(GLenum));
+	writeData(buf, offset, &param, sizeof(GLfloat));
+	sendCommand(buf, offset);
+}
+
+void glTexParameteri(GLenum target, GLenum pname, GLint param)
+{
+        LOGV("glTexParameteri command \n");
+ 	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLTEXPARAMETERI, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &target, sizeof(GLenum));
+	writeData(buf, offset, &pname, sizeof(GLenum));
+	writeData(buf, offset, &param, sizeof(GLint));
+	sendCommand(buf, offset);
+}
+void glTexImage2D (GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const GLvoid* pixels)
+{
+ 	LOGV("glTexImage2D command \n");
+ 	command_control cmd;
+	int offset = 0;
+	int size = 0;
+	if (pixels != NULL) {
+ 		size = width*height*getDataSize(type)*getDataFormatSize(format);
+	}
+        createGLES2Command(GLTEXIMAGE2D,cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeUint32(buf, offset, target);
+	writeUint32(buf, offset, level);
+	writeUint32(buf, offset, internalformat);
+	writeUint32(buf, offset, width);
+	writeUint32(buf, offset, height);
+	writeUint32(buf, offset, border);
+	writeUint32(buf, offset, format);
+	writeUint32(buf, offset, type);
+	writeUint32(buf, offset, size); // write the size of the data
+	if (size>0) {
+		sendCommandDataWithHeader(buf, offset, pixels, size);
+	} else {
+		sendCommand(buf, offset);
+	}
+}
+
+void glTexParameterfv(GLenum target, GLenum pname, const GLfloat* params)
+{
+	LOGV("glTexParameterfv command \n");
+ 	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLTEXPARAMETERFV, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &target, sizeof(GLenum));
+	writeData(buf, offset, &pname, sizeof(GLenum));
+	writeData(buf, offset, params, sizeof(GLfloat));
+	sendCommand(buf, offset);
+}
+void glTexParameteriv(GLenum target, GLenum pname, const GLint* params)
+{
+	LOGV("glTexParameteriv command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLTEXPARAMETERIV, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &target, sizeof(GLenum));
+	writeData(buf, offset, &pname, sizeof(GLenum));
+	writeData(buf, offset, params, sizeof(GLint));
+	sendCommand(buf, offset);
+}
+void glTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const GLvoid* pixels)
+{
+	LOGV("glTexSubImage2D command \n");
+ 	command_control cmd;
+	int offset = 0;
+	int size = 0;
+	if (pixels != NULL) {
+ 		size = width*height*getDataSize(type)*getDataFormatSize(format);
+	}
+        createGLES2Command(GLTEXSUBIMAGE2D,cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeUint32(buf, offset, target);
+	writeUint32(buf, offset, level);
+	writeUint32(buf, offset, xoffset);
+	writeUint32(buf, offset, yoffset);
+	writeUint32(buf, offset, width);
+	writeUint32(buf, offset, height);
+	writeUint32(buf, offset, format);
+	writeUint32(buf, offset, type);
+	writeUint32(buf, offset, size); // write the size of the data
+	if (size>0) {
+		sendCommandDataWithHeader(buf, offset, pixels, size);
+	} else {
+		sendCommand(buf, offset);
+	}
+}
+
+void glReadPixels(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, GLvoid* pixels)
+{
+	LOGV("glReadPixels command \n");
+        command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	int size=width*height*getDataSize(type)*getDataFormatSize(format);;
+        createGLES2Command(GLREADPIXELS,cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &x, sizeof(GLint));
+	writeData(buf, offset, &y, sizeof(GLint));
+	writeData(buf, offset, &width, sizeof(GLsizei));
+	writeData(buf, offset, &height, sizeof(GLsizei));
+	writeData(buf, offset, &format, sizeof(GLenum));
+	writeData(buf, offset, &type, sizeof(GLenum));
+	sendCommandSync(buf, offset, pixels,size);
+
+}
+
+void glUniform1f(GLint location, GLfloat x)
+{
+        LOGV("glUniform1f command \n");
+ 	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLUNIFORM1F, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &location, sizeof(GLint));
+	writeData(buf, offset, &x, sizeof(GLfloat));
+	sendCommand(buf, offset);
+}
+
+void glUniform1fv(GLint location, GLsizei count, const GLfloat* v)
+{
+        LOGV("glUniform1fv command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	int size=sizeof(GLsizei)+sizeof(GLint)+count*sizeof(GLfloat);
+        createGLES2Command(GLUNIFORM1FV, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &location, sizeof(GLint));
+	writeData(buf, offset, &count, sizeof(GLsizei));
+	writeData(buf, offset, (void*)v, count*sizeof(GLfloat));
+	sendCommand(buf, offset);
+}
+
+void glUniform1i(GLint location, GLint x)
+{
+        LOGV("glUniform1i command \n");
+ 	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLUNIFORM1I, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &location, sizeof(GLint));
+	writeData(buf, offset, &x, sizeof(GLint));
+	sendCommand(buf, offset);
+}
+void glUniform1iv(GLint location, GLsizei count, const GLint* v)
+{
+        LOGV("glUniform1iv command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	int size=sizeof(GLsizei)+sizeof(GLint)+count*sizeof(GLint);
+        createGLES2Command(GLUNIFORM1IV, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &location, sizeof(GLint));
+	writeData(buf, offset, &count, sizeof(GLsizei));
+	writeData(buf, offset, (void*)v, count*sizeof(GLint));
+	sendCommand(buf, offset);
+}
+void glUniform2f(GLint location, GLfloat x, GLfloat y)
+{
+        LOGV("glUniform2f command \n");
+ 	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLUNIFORM2F, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &location, sizeof(GLint));
+	writeData(buf, offset, &x, sizeof(GLfloat));
+	writeData(buf, offset, &y, sizeof(GLfloat));
+	sendCommand(buf, offset);
+}
+void glUniform2fv(GLint location, GLsizei count, const GLfloat* v)
+ {
+        LOGV("glUniform2fv command \n");
+ 	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	int size=sizeof(GLsizei)+sizeof(GLint)+count*2*sizeof(GLfloat);
+        createGLES2Command(GLUNIFORM2FV, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &location, sizeof(GLint));
+	writeData(buf, offset, &count, sizeof(GLsizei));
+	for(int i=0;i<count;i++)
+		{
+			writeData(buf, offset, (void*)&v[i*2], 2*sizeof(GLfloat));
+		}
+	sendCommand(buf, offset);
+}
+
+void glUniform2i(GLint location, GLint x, GLint y)
+{
+        LOGV("glUniform2i command \n");
+ 	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLUNIFORM2I, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &location, sizeof(GLint));
+	writeData(buf, offset, &x, sizeof(GLint));
+	writeData(buf, offset, &y, sizeof(GLint));
+	sendCommand(buf, offset);
+}
+void glUniform2iv(GLint location, GLsizei count, const GLint* v)
+{
+        LOGV("glUniform2iv command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	int size=sizeof(GLsizei)+sizeof(GLint)+count*2*sizeof(GLint);
+        createGLES2Command(GLUNIFORM2IV, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &location, sizeof(GLint));
+	writeData(buf, offset, &count, sizeof(GLsizei));
+	for(int i=0;i<count;i++)
+	{
+		writeData(buf, offset, (void*)&v[i*2], 2*sizeof(GLint));
+	}
+	sendCommand(buf, offset);
+}
+void glUniform3f(GLint location, GLfloat x, GLfloat y, GLfloat z)
+{
+        LOGV("glUniform3f command \n");
+ 	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLUNIFORM3F, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &location, sizeof(GLint));
+	writeData(buf, offset, &x, sizeof(GLfloat));
+	writeData(buf, offset, &y, sizeof(GLfloat));
+	writeData(buf, offset, &z, sizeof(GLfloat));
+	sendCommand(buf, offset);
+}
+
+void glUniform3i(GLint location, GLint x, GLint y, GLint z)
+{
+        LOGV("glUniform3i command \n");
+ 	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLUNIFORM3I, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &location, sizeof(GLint));
+	writeData(buf, offset, &x, sizeof(GLint));
+	writeData(buf, offset, &y, sizeof(GLint));
+	writeData(buf, offset, &z, sizeof(GLint));
+	sendCommand(buf, offset);
+}
+void glUniform3iv(GLint location, GLsizei count, const GLint* v)
+{
+        LOGV("glUniform3iv command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	int size=sizeof(GLsizei)+sizeof(GLint)+3*count*sizeof(GLint);
+        createGLES2Command(GLUNIFORM3IV, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &location, sizeof(GLint));
+	writeData(buf, offset, &count, sizeof(GLsizei));
+	for(int i=0;i<count;i++)
+	{
+		writeData(buf, offset, (void*)&v[i*3], 3*sizeof(GLint));
+	}
+	sendCommand(buf, offset);
+}
+void glUniform4f(GLint location, GLfloat x, GLfloat y, GLfloat z, GLfloat w)
+{
+        LOGV("glUniform4f command \n");
+ 	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLUNIFORM4F, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &location, sizeof(GLint));
+	writeData(buf, offset, &x, sizeof(GLfloat));
+	writeData(buf, offset, &y, sizeof(GLfloat));
+	writeData(buf, offset, &z, sizeof(GLfloat));
+	writeData(buf, offset, &w, sizeof(GLfloat));
+	sendCommand(buf, offset);
+}
+void glUniform4fv(GLint location, GLsizei count, const GLfloat* v)
+{
+        LOGV("glUniform4fv command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	int size=sizeof(GLsizei)+sizeof(GLint)+4*count*sizeof(GLint);
+        createGLES2Command(GLUNIFORM4FV, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &location, sizeof(GLint));
+	writeData(buf, offset, &count, sizeof(GLsizei));
+	for(int i=0;i<count;i++)
+	{
+		writeData(buf, offset, (void*)&v[i*4], 4*sizeof(GLfloat));
+	}
+	sendCommand(buf, offset);
+}
+void glUniform4i(GLint location, GLint x, GLint y, GLint z, GLint w)
+{
+        LOGV("glUniform4i command \n");
+ 	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLUNIFORM4I, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &location, sizeof(GLint));
+	writeData(buf, offset, &x, sizeof(GLint));
+	writeData(buf, offset, &y, sizeof(GLint));
+	writeData(buf, offset, &z, sizeof(GLint));
+	writeData(buf, offset, &w, sizeof(GLint));
+	sendCommand(buf, offset);
+}
+void glUniform4iv(GLint location, GLsizei count, const GLint* v)
+{
+        LOGV("glUniform4iv command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	int size=sizeof(GLsizei)+sizeof(GLint)+4*count*sizeof(GLint);
+        createGLES2Command(GLUNIFORM4IV, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &location, sizeof(GLint));
+	writeData(buf, offset, &count, sizeof(GLsizei));
+	for(int i=0;i<count;i++)
+	{
+		writeData(buf, offset, (void*)&v[i*4], 4*sizeof(GLint));
+	}
+	sendCommand(buf, offset);
+}
+void glUniformMatrix2fv(GLint location, GLsizei count, GLboolean transpose, const GLfloat* value)
+{
+        LOGV("glUniformMatrix2fv command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	GLuint transVal = (GLuint) transpose; //GLboolean is byte size, which is incovenient for the parsing which assumes 32 bit word alignment
+	int size=sizeof(GLsizei)+2*sizeof(GLint)+4*count*sizeof(GLfloat);
+        createGLES2Command(GLUNIFORMMATRIX2FV, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &location, sizeof(GLint));
+	writeData(buf, offset, &count, sizeof(GLsizei));
+        writeData(buf, offset, &transVal, sizeof(GLuint));
+	for(int i=0;i<count;i++)
+	{
+		writeData(buf, offset, (void*)&value[i*4], 4*sizeof(GLfloat));
+	}
+
+	sendCommand(buf, offset);
+}
+void glUniformMatrix3fv(GLint location, GLsizei count, GLboolean transpose, const GLfloat* value)
+{
+        LOGV("glUniformMatrix3fv command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+	GLuint transVal = (GLuint) transpose;
+	int size=sizeof(GLsizei)+2*sizeof(GLint)+9*count*sizeof(GLint);
+        createGLES2Command(GLUNIFORMMATRIX3FV, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &location, sizeof(GLint));
+	writeData(buf, offset, &count, sizeof(GLsizei));
+	writeData(buf, offset, &transVal, sizeof(GLuint));
+	for(int i=0;i<count;i++)
+	{
+		writeData(buf, offset, (void*)&value[i*9], 9*sizeof(GLfloat));
+	}
+	sendCommand(buf, offset);
+}
+
+
+void glValidateProgram(GLuint program)
+{
+        LOGV("glValidateProgram command \n");
+    	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLVALIDATEPROGRAM, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &program, sizeof(GLint));
+	sendCommand(buf, offset);
+}
+void glVertexAttrib1f(GLuint indx, GLfloat x)
+{
+        LOGV("glVertexAttrib1f command \n");
+    	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLVERTEXATTRIB1F, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &indx, sizeof(GLuint));
+	writeData(buf, offset, &x, sizeof(GLfloat));
+	sendCommand(buf, offset);
+}
+void glVertexAttrib1fv(GLuint indx, const GLfloat* values)
+{
+        LOGV("glVertexAttrib1fv command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLVERTEXATTRIB1FV, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &indx, sizeof(GLuint));
+	writeData(buf, offset, (void*)values, sizeof(GLfloat));
+	sendCommand(buf, offset);
+}
+
+void glVertexAttrib2f(GLuint indx, GLfloat x, GLfloat y)
+{
+        LOGV("glVertexAttrib2f command \n");
+    	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLVERTEXATTRIB2F, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &indx, sizeof(GLuint));
+	writeData(buf, offset, &x, sizeof(GLfloat));
+	writeData(buf, offset, &y, sizeof(GLfloat));
+	sendCommand(buf, offset);
+}
+void glVertexAttrib2fv(GLuint indx, const GLfloat* values)
+{
+        LOGV("glVertexAttrib2fv command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLVERTEXATTRIB2FV, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &indx, sizeof(GLuint));
+	writeData(buf, offset, (void*)values, 2*sizeof(GLfloat));
+	sendCommand(buf, offset);
+}
+void glVertexAttrib3f(GLuint indx, GLfloat x, GLfloat y, GLfloat z)
+{
+        LOGV("glVertexAttrib3f command \n");
+    	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLVERTEXATTRIB3F, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &indx, sizeof(GLuint));
+	writeData(buf, offset, &x, sizeof(GLfloat));
+	writeData(buf, offset, &y, sizeof(GLfloat));
+	writeData(buf, offset, &z, sizeof(GLfloat));
+	sendCommand(buf, offset);
+}
+void glVertexAttrib3fv(GLuint indx, const GLfloat* values)
+{
+       LOGV("glVertexAttrib3fv command \n");
+	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLVERTEXATTRIB3FV, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &indx, sizeof(GLuint));
+	writeData(buf, offset, (void*)values, 3*sizeof(GLfloat));
+	sendCommand(buf, offset);
+
+}
+void glVertexAttrib4f(GLuint indx, GLfloat x, GLfloat y, GLfloat z, GLfloat w)
+{
+       LOGV("glVertexAttrib4f command \n");
+    	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLVERTEXATTRIB4F, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &indx, sizeof(GLuint));
+	writeData(buf, offset, &x, sizeof(GLfloat));
+	writeData(buf, offset, &y, sizeof(GLfloat));
+	writeData(buf, offset, &z, sizeof(GLfloat));
+	writeData(buf, offset, &w, sizeof(GLfloat));
+	sendCommand(buf, offset);
+}
+
+void glVertexAttrib4fv(GLuint indx, const GLfloat* values)
+{
+	LOGV("glVertexAttrib4fv command \n");
+ 	command_control cmd;
+	egl_context_t* c = getContext();
+	int offset = 0;
+        createGLES2Command(GLVERTEXATTRIB4FV, cmd);
+        char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd, sizeof(command_control));
+	writeData(buf, offset, &indx, sizeof(GLuint));
+	writeData(buf, offset, (void*)values, 4*sizeof(GLfloat));
+	sendCommand(buf, offset);
+}
+
+

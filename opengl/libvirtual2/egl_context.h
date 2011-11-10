@@ -41,10 +41,14 @@ struct egl_context_t {
 	AttribPointer* attribs;
 	FILE *theVirtualDeviceFileDescriptor;
 	FILE *theVirtualDeviceIOCTLFileDescriptor;
+	FILE *theVirtualDeviceExchangeFileDescriptor;
 	int theVirtualDeviceDescriptor;
 	int theVirtualDeviceIOCTLDescriptor;
+	int theVirtualDeviceExchangeDescriptor;
 	unsigned int surfaceCounter;
 	unsigned int seq;
+	int physaddress_start;
+	void *virtaddr;
 
 	int nextToken() {
 		token += 1;

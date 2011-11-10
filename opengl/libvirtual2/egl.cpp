@@ -176,7 +176,7 @@ egl_surface_t::~egl_surface_t()
 }
 bool egl_surface_t::isValid() const {
     LOGE_IF(magic != MAGIC, "invalid EGLSurface (%p)", this);
-    return magic == MAGIC; 
+    return magic == MAGIC;
 }
 
 EGLBoolean egl_surface_t::swapBuffers() {
@@ -206,17 +206,17 @@ EGLBoolean egl_surface_t::SetSurfaceparam(FILE* fd, int32_t surfaceEnumerator, i
 LOGV("selva::SetSurfaceparam eglsurface base\n");
    return EGL_FALSE;
 }
-EGLBoolean  egl_surface_t::SetpixelFormat(EGLint pixformat) 
+EGLBoolean  egl_surface_t::SetpixelFormat(EGLint pixformat)
 {
 LOGV("selva::SetpixelFormat eglsurface base\n");
    return EGL_FALSE;
 }
-EGLBoolean  egl_surface_t::convertPixelParam(int pixelFormat,int* pixformat,int* pixtype) 
+EGLBoolean  egl_surface_t::convertPixelParam(int pixelFormat,int* pixformat,int* pixtype)
 {
 LOGV("selva::convertpixelparam eglsurface base\n");
    return EGL_FALSE;
 }
-EGLint    egl_surface_t::getPixelFormat() const 
+EGLint    egl_surface_t::getPixelFormat() const
 {
   LOGV("selva::getpixelFormat eglsurface base\n");
    return EGL_FALSE;
@@ -274,7 +274,7 @@ private:
     int   pixelFormat;
  /*IDC_GLES2 end*/
     GGLFormat const* pixelFormatTable;
-    
+
     struct Rect {
         inline Rect() { };
         inline Rect(int32_t w, int32_t h)
@@ -292,10 +292,10 @@ private:
             return (left>=right || top>=bottom);
         }
         void dump(char const* what) {
-            LOGV("%s { %5d, %5d, w=%5d, h=%5d }", 
+            LOGV("%s { %5d, %5d, w=%5d, h=%5d }",
                     what, left, top, right-left, bottom-top);
         }
-        
+
         int32_t left;
         int32_t top;
         int32_t right;
@@ -354,7 +354,7 @@ private:
         Rect storage[4];
         ssize_t count;
     };
-    
+
     struct region_iterator : public copybit_region_t {
         region_iterator(const Region& region)
             : b(region.begin()), e(region.end()) {
@@ -386,7 +386,7 @@ egl_window_surface_v2_t::egl_window_surface_v2_t(EGLDisplay dpy,
         EGLConfig config,
         int32_t depthFormat,
         ANativeWindow* window)
-    : egl_surface_t(dpy, config, depthFormat), 
+    : egl_surface_t(dpy, config, depthFormat),
     nativeWindow(window), buffer(0), previousBuffer(0), module(0),
     blitengine(0), bits(NULL)
 {
@@ -399,7 +399,7 @@ egl_window_surface_v2_t::egl_window_surface_v2_t(EGLDisplay dpy,
     }
 
     pixelFormatTable = gglGetPixelFormatTable();
-    
+
     // keep a reference on the window
     nativeWindow->common.incRef(&nativeWindow->common);
     nativeWindow->query(nativeWindow, NATIVE_WINDOW_WIDTH, &width);
@@ -411,7 +411,7 @@ egl_window_surface_v2_t::~egl_window_surface_v2_t() {
         buffer->common.decRef(&buffer->common);
     }
     if (previousBuffer) {
-        previousBuffer->common.decRef(&previousBuffer->common); 
+        previousBuffer->common.decRef(&previousBuffer->common);
     }
     nativeWindow->common.decRef(&nativeWindow->common);
     if (blitengine) {
@@ -419,10 +419,10 @@ egl_window_surface_v2_t::~egl_window_surface_v2_t() {
     }
 }
 
-EGLBoolean egl_window_surface_v2_t::connect() 
+EGLBoolean egl_window_surface_v2_t::connect()
 {
     // we're intending to do software rendering
-    native_window_set_usage(nativeWindow, 
+    native_window_set_usage(nativeWindow,
             GRALLOC_USAGE_SW_READ_OFTEN | GRALLOC_USAGE_SW_WRITE_OFTEN);
 
     // dequeue a buffer
@@ -449,7 +449,7 @@ EGLBoolean egl_window_surface_v2_t::connect()
     // Lock the buffer
     nativeWindow->lockBuffer(nativeWindow, buffer);
     // pin the buffer down
-    if (lock(buffer, GRALLOC_USAGE_SW_READ_OFTEN | 
+    if (lock(buffer, GRALLOC_USAGE_SW_READ_OFTEN |
             GRALLOC_USAGE_SW_WRITE_OFTEN, &bits) != NO_ERROR) {
         LOGE("connect() failed to lock buffer %p (%ux%u)",
                 buffer, buffer->width, buffer->height);
@@ -470,7 +470,7 @@ EGLBoolean egl_window_surface_v2_t::connect()
     return EGL_TRUE;
 }
 
-void egl_window_surface_v2_t::disconnect() 
+void egl_window_surface_v2_t::disconnect()
 {
     if (buffer && bits) {
         bits = NULL;
@@ -483,7 +483,7 @@ void egl_window_surface_v2_t::disconnect()
         buffer = 0;
     }
     if (previousBuffer) {
-        previousBuffer->common.decRef(&previousBuffer->common); 
+        previousBuffer->common.decRef(&previousBuffer->common);
         previousBuffer = 0;
     }
 }
@@ -525,7 +525,7 @@ status_t egl_window_surface_v2_t::getSurfacePhysicalAddr(android_native_buffer_t
      return err;
 }
 
-EGLBoolean  egl_window_surface_v2_t::SetpixelFormat(EGLint pixformat) 
+EGLBoolean  egl_window_surface_v2_t::SetpixelFormat(EGLint pixformat)
 {
    LOGV("Selva::set pixel Format\n");
     pixelFormat=pixformat;
@@ -541,7 +541,7 @@ void egl_window_surface_v2_t::copyBlt(
 {
     // FIXME: use copybit if possible
     // NOTE: dst and src must be the same format
-    
+
     status_t err = NO_ERROR;
     copybit_device_t* const copybit = blitengine;
     if (copybit)  {
@@ -556,7 +556,7 @@ void egl_window_surface_v2_t::copyBlt(
         dimg.h = dst->height;
         dimg.format = dst->format;
         dimg.handle = const_cast<native_handle_t*>(dst->handle);
-        
+
         copybit->set_parameter(copybit, COPYBIT_TRANSFORM, 0);
         copybit->set_parameter(copybit, COPYBIT_PLANE_ALPHA, 255);
         copybit->set_parameter(copybit, COPYBIT_DITHER, COPYBIT_DISABLE);
@@ -570,7 +570,7 @@ void egl_window_surface_v2_t::copyBlt(
     if (!copybit || err) {
         Region::const_iterator cur = clip.begin();
         Region::const_iterator end = clip.end();
-        
+
         const size_t bpp = pixelFormatTable[src->format].size;
         const size_t dbpr = dst->stride * bpp;
         const size_t sbpr = src->stride * bpp;
@@ -603,23 +603,22 @@ EGLBoolean egl_window_surface_v2_t::swapBuffers()
 {
    	char theSync[64];
 
-	int offset = 0;
-	int length = sizeof(GLuint) *2;
+	int offset = 0, timeout = 0, ret = 0;
 	command_control cmd;
-	createEGLCommand(EGL_SYNC, length, cmd);
- 
+	createEGLCommand(EGL_SYNC, cmd);
+
     if (!buffer) {
         return setError(EGL_BAD_ACCESS, EGL_FALSE);
     }
 
-    LOGV ("------------ swapBuffers -----------------------------------------------------------------------");
+    LOGV ("------------ swapBuffers -------------");
 
 	egl_context_t* f = egl_context_t::context(this->ctx);
 
-	if (f->theVirtualDeviceIOCTLFileDescriptor)
+	if (f->gl_client_version == 2 && f->theVirtualDeviceIOCTLFileDescriptor)
 	{
 
-		// Only send the surface information on the first two swaps, we don't need to send any more. */
+		// Only send the surface information on the first two swaps, we don't need to send any more.
 		if (f->surfaceCounter < 2)
 		{
 			if(getSurfacePhysicalAddr(buffer,&phyaddr)!=NO_ERROR) return setError(EGL_BAD_ACCESS, EGL_FALSE);
@@ -631,17 +630,14 @@ EGLBoolean egl_window_surface_v2_t::swapBuffers()
 		writeData(theSync, offset, &cmd,sizeof(command_control));
 		writeData(theSync, offset, &f->surfaceCounter,sizeof(GLuint));
 		writeData(theSync, offset, &surfaceNum,sizeof(GLuint));
-		sendCommand(theSync, offset);
+		sendCommandSync(theSync, offset);
 
-		fflush(f->theVirtualDeviceFileDescriptor);
-		ioctl(f->theVirtualDeviceIOCTLDescriptor, VIRTUALDEVICE_IOCTL_SIGNAL_BUFFER_SYNC, f->surfaceCounter);
 		f->surfaceCounter++;						// For the time being just toggle it.
-
 	}
 
     /*
      * Handle eglSetSwapRectangleANDROID()
-     * We copyback from the front buffer 
+     * We copyback from the front buffer
      */
     if (!dirtyRegion.isEmpty()) {
         dirtyRegion.andSelf(Rect(buffer->width, buffer->height));
@@ -649,7 +645,7 @@ EGLBoolean egl_window_surface_v2_t::swapBuffers()
             const Region copyBack(Region::subtract(oldDirtyRegion, dirtyRegion));
             if (!copyBack.isEmpty()) {
                 void* prevBits;
-                if (lock(previousBuffer, 
+                if (lock(previousBuffer,
                         GRALLOC_USAGE_SW_READ_OFTEN, &prevBits) == NO_ERROR) {
                     // copy from previousBuffer to buffer
                     copyBlt(buffer, bits, previousBuffer, prevBits, copyBack);
@@ -661,10 +657,10 @@ EGLBoolean egl_window_surface_v2_t::swapBuffers()
     }
 
     if (previousBuffer) {
-        previousBuffer->common.decRef(&previousBuffer->common); 
+        previousBuffer->common.decRef(&previousBuffer->common);
         previousBuffer = 0;
     }
-    
+
     unlock(buffer);
     previousBuffer = buffer;
     nativeWindow->queueBuffer(nativeWindow, buffer);
@@ -744,7 +740,7 @@ EGLBoolean egl_window_surface_v2_t::convertPixelParam(int pixelFormat,int* pixfo
         *pixtype = GGL_PIXEL_FORMAT_Z_16;
         break;
     default:
-        return NAME_NOT_FOUND; 
+        return NAME_NOT_FOUND;
   }
    return EGL_TRUE;
 }
@@ -754,7 +750,7 @@ EGLBoolean egl_window_surface_v2_t::SetSurfaceparam(FILE* fd, int32_t surfaceEnu
 {
 	char theSurface[128];
 	command_control cmd;
-	createEGLCommand(EGL_SURFACE, 9* sizeof(GLuint), cmd);
+	createEGLCommand(EGL_SURFACE, cmd);
 
 	int offset = 0;
 	writeData(theSurface, offset, &cmd, sizeof(command_control));
@@ -768,9 +764,9 @@ EGLBoolean egl_window_surface_v2_t::SetSurfaceparam(FILE* fd, int32_t surfaceEnu
 	writeUint32(theSurface, offset, pixelType);
 	writeUint32(theSurface, offset, stride);
 	sendCommand(theSurface, offset);
-	   
+
 	return EGL_TRUE;
-	
+
 }
 
 /*IDC_GLES2 end*/
@@ -811,20 +807,20 @@ EGLint egl_window_surface_v2_t::getVerticalResolution() const {
 EGLint egl_window_surface_v2_t::getRefreshRate() const {
     return (60 * EGL_DISPLAY_SCALING); // FIXME
 }
-EGLint egl_window_surface_v2_t::getSwapBehavior() const 
+EGLint egl_window_surface_v2_t::getSwapBehavior() const
 {
     /*
      * EGL_BUFFER_PRESERVED means that eglSwapBuffers() completely preserves
      * the content of the swapped buffer.
-     * 
+     *
      * EGL_BUFFER_DESTROYED means that the content of the buffer is lost.
-     * 
+     *
      * However when ANDROID_swap_retcangle is supported, EGL_BUFFER_DESTROYED
      * only applies to the area specified by eglSetSwapRectangleANDROID(), that
      * is, everything outside of this area is preserved.
-     * 
+     *
      * This implementation of EGL assumes the later case.
-     * 
+     *
      */
 
     return EGL_BUFFER_DESTROYED;
@@ -841,7 +837,7 @@ struct egl_pixmap_surface_t : public egl_surface_t
 
     virtual ~egl_pixmap_surface_t() { }
 
-    virtual     bool        initCheck() const { return !depth.format || depth.data!=0; } 
+    virtual     bool        initCheck() const { return !depth.format || depth.data!=0; }
     virtual     EGLBoolean  bindDrawSurface(ogles_context_t* gl);
     virtual     EGLBoolean  bindReadSurface(ogles_context_t* gl);
     virtual     EGLint      getWidth() const    { return nativePixmap.width;  }
@@ -1050,12 +1046,12 @@ static const extention_map_t gExtentionMap[] = {
             (__eglMustCastToProperFunctionPointerType)&glDeleteBuffers },
     { "glGenBuffers",
             (__eglMustCastToProperFunctionPointerType)&glGenBuffers },
-    { "eglCreateImageKHR",  
-            (__eglMustCastToProperFunctionPointerType)&eglCreateImageKHR }, 
-    { "eglDestroyImageKHR", 
-            (__eglMustCastToProperFunctionPointerType)&eglDestroyImageKHR }, 
-    { "eglSetSwapRectangleANDROID", 
-            (__eglMustCastToProperFunctionPointerType)&eglSetSwapRectangleANDROID }, 
+    { "eglCreateImageKHR",
+            (__eglMustCastToProperFunctionPointerType)&eglCreateImageKHR },
+    { "eglDestroyImageKHR",
+            (__eglMustCastToProperFunctionPointerType)&eglDestroyImageKHR },
+    { "eglSetSwapRectangleANDROID",
+            (__eglMustCastToProperFunctionPointerType)&eglSetSwapRectangleANDROID },
 };
 
 /*
@@ -1206,7 +1202,7 @@ static config_pair_t const config_8_attribute_list[] = {
         { EGL_BLUE_SIZE,        4 },
         { EGL_GREEN_SIZE,       4 },
         { EGL_RED_SIZE,         4 },
-        { EGL_CONFIG_ID,        6 }, 
+        { EGL_CONFIG_ID,        6 },
         { EGL_SURFACE_TYPE,     EGL_WINDOW_BIT|EGL_PBUFFER_BIT|EGL_PIXMAP_BIT },
 	{ EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,},
 };
@@ -1451,7 +1447,7 @@ static EGLSurface createWindowSurface(EGLDisplay dpy, EGLConfig config,
             ANDROID_NATIVE_WINDOW_MAGIC) {
         return setError(EGL_BAD_NATIVE_WINDOW, EGL_NO_SURFACE);
     }
-        
+
     EGLint configID;
     LOGV("GLES2 createWindowSurface2 get config attrib");
     if (getConfigAttrib(dpy, config, EGL_CONFIG_ID, &configID) == EGL_FALSE)
@@ -1481,7 +1477,7 @@ static EGLSurface createWindowSurface(EGLDisplay dpy, EGLConfig config,
     }
 
 /*IDC_GLES2 start*/
-  LOGV("Selva:: call setpixelFormat\n");  
+  LOGV("Selva:: call setpixelFormat\n");
     surface->SetpixelFormat(pixelFormat);
 /*IDC_GLES2 end*/
 
@@ -1503,11 +1499,11 @@ static EGLSurface createPixmapSurface(EGLDisplay dpy, EGLConfig config,
     if (!(surfaceType & EGL_PIXMAP_BIT))
         return setError(EGL_BAD_MATCH, EGL_NO_SURFACE);
 
-    if (static_cast<egl_native_pixmap_t*>(pixmap)->version != 
+    if (static_cast<egl_native_pixmap_t*>(pixmap)->version !=
             sizeof(egl_native_pixmap_t)) {
         return setError(EGL_BAD_NATIVE_PIXMAP, EGL_NO_SURFACE);
     }
-    
+
     EGLint configID;
     if (getConfigAttrib(dpy, config, EGL_CONFIG_ID, &configID) == EGL_FALSE)
         return EGL_FALSE;
@@ -1674,7 +1670,7 @@ EGLBoolean eglChooseConfig( EGLDisplay dpy, const EGLint *attrib_list,
     LOGV("GLES2 Enter eglChooseConfig");
     if (egl_display_t::is_valid(dpy) == EGL_FALSE)
         return setError(EGL_BAD_DISPLAY, EGL_FALSE);
-    
+
     if (ggl_unlikely(num_config==0)) {
         return setError(EGL_BAD_PARAMETER, EGL_FALSE);
     }
@@ -1881,7 +1877,7 @@ EGLContext eglCreateContext(EGLDisplay dpy, EGLConfig config,
     if (!gl) return setError(EGL_BAD_ALLOC, EGL_NO_CONTEXT);
 
     egl_context_t* c = static_cast<egl_context_t*>(gl->rasterizer.base);
-	
+
     c->flags = egl_context_t::NEVER_CURRENT;
     c->dpy = dpy;
     c->config = config;
@@ -1894,7 +1890,7 @@ EGLContext eglCreateContext(EGLDisplay dpy, EGLConfig config,
     }
 
     libvirtual_init(c);
-    
+
    LOGV("GLES2 return valid context\n");
     return (EGLContext)gl;
 }
@@ -1962,15 +1958,15 @@ EGLBoolean eglMakeCurrent(  EGLDisplay dpy, EGLSurface draw,
             egl_context_t* c = egl_context_t::context(ctx);
             egl_surface_t* d = (egl_surface_t*)draw;
             egl_surface_t* r = (egl_surface_t*)read;
-            
+
             if (c->draw) {
                 egl_surface_t* s = reinterpret_cast<egl_surface_t*>(c->draw);
                 s->disconnect();
             }
             if (c->read) {
-                // FIXME: unlock/disconnect the read surface too 
+                // FIXME: unlock/disconnect the read surface too
             }
-            
+
             c->draw = draw;
             c->read = read;
 
@@ -1988,11 +1984,11 @@ EGLBoolean eglMakeCurrent(  EGLDisplay dpy, EGLSurface draw,
 
 /*IDC_GLES2 start*/
 /*selva added for sending Surface parameters to the Host-Start */
-  #if 1      
+  #if 1
 	 egl_context_t* eglcontext = egl_context_t::context(gl);
      if(eglcontext->theVirtualDeviceFileDescriptor)
        {
-  	    Eglsurface_desc eglsurface_param;  
+  	    Eglsurface_desc eglsurface_param;
             EGLBoolean ret;
 	    int lpixelFormat ,lpixformat,lpixtype;
                 int lpid=getpid();
@@ -2001,19 +1997,19 @@ EGLBoolean eglMakeCurrent(  EGLDisplay dpy, EGLSurface draw,
             ret=d->convertPixelParam(lpixelFormat,&lpixformat,&lpixtype);
              LOGV("Selva :: PixF %x pixT... %x \n",lpixformat,lpixtype);
 	    if(ret==EGL_FALSE)
-	    { 
+	    {
                LOGV("Selva ::convertpixelparam fails \n");
 	       return EGL_FALSE;
-  	     }     
+  	     }
 	        eglsurface_param.pid=lpid;
 	        eglsurface_param.width=w;
 	        eglsurface_param.height=h;
 			eglsurface_param.phyaddr=0x00;
 	        eglsurface_param.virtaddr=0x00;
 	        eglsurface_param.pixelformat=(pixel_format)lpixformat;
-	        eglsurface_param.pixeltype=(pixel_type)lpixtype;               
+	        eglsurface_param.pixeltype=(pixel_type)lpixtype;
         }
- 
+
 #endif
 /*selva added for sending Surface parameters to the Host- End */
 /*IDC_GLES2 end*/
@@ -2031,7 +2027,7 @@ EGLBoolean eglMakeCurrent(  EGLDisplay dpy, EGLSurface draw,
                 d->bindDrawSurface(gl);
             }
             if (r) {
-                // FIXME: lock/connect the read surface too 
+                // FIXME: lock/connect the read surface too
                 r->ctx = ctx;
                 r->bindReadSurface(gl);
             }
@@ -2050,7 +2046,7 @@ EGLBoolean eglMakeCurrent(  EGLDisplay dpy, EGLSurface draw,
                 if (r) {
                     c->read = 0;
                     r->ctx = EGL_NO_CONTEXT;
-                    // FIXME: unlock/disconnect the read surface too 
+                    // FIXME: unlock/disconnect the read surface too
                 }
             }
         }
@@ -2370,7 +2366,7 @@ EGLBoolean eglSetSwapRectangleANDROID(EGLDisplay dpy, EGLSurface draw,
 
 int nextSequence() {
 	ogles_context_t* c = ogles_context_t::get();
-	return egl_context_t::context(c)->seq++;	
+	return egl_context_t::context(c)->seq++;
 }
 
 void libvirtual_init(egl_context_t* c)
@@ -2378,7 +2374,8 @@ void libvirtual_init(egl_context_t* c)
 	c->theVirtualDeviceFileDescriptor = 0;
 	if (c->gl_client_version == 2) {
 		// initialise structure to 0s
-		c->attribs = (AttribPointer*)calloc(MAX_ATTRIBS, sizeof(AttribPointer)); 
+		c->attribs = (AttribPointer*)calloc(MAX_ATTRIBS, sizeof(AttribPointer));
+
 		LOGV ("[libEGL->VirtualGL] Opening device %s ", theVirtualDeviceFilename);
 		c->theVirtualDeviceFileDescriptor = fopen (theVirtualDeviceFilename, "r+");
 		if (c->theVirtualDeviceFileDescriptor)
@@ -2399,6 +2396,27 @@ void libvirtual_init(egl_context_t* c)
 			LOGV ("[libEGL->VirtualGL] Could not open device.  Not ready/loaded?  Poop.\n");
 		}
 
+		c->theVirtualDeviceExchangeFileDescriptor = fopen("/dev/virtual_device_exchange","r+");
+		if (c->theVirtualDeviceExchangeFileDescriptor)
+		{
+			LOGV ("[libEGL->VirtualGL] Ok!\n");
+			c->theVirtualDeviceExchangeDescriptor = fileno (c->theVirtualDeviceExchangeFileDescriptor);
+			if(c->theVirtualDeviceExchangeDescriptor){
+				c->virtaddr = mmap(0, 16384, PROT_READ|PROT_WRITE, MAP_SHARED,c->theVirtualDeviceExchangeDescriptor, 0);
+				if (c->virtaddr == MAP_FAILED) {
+					LOGD("Could not mmap theVirtualDeviceExchangeDescriptor ");
+				}
+				c->physaddress_start = ioctl (c->theVirtualDeviceExchangeDescriptor, VIRTUALDEVICE_IOCTL_REGION_PHYSICAL_ADDR_START, 0);
+				LOGV("VirtualDeviceExchange Device  phy addr %x virt addr %x",c->physaddress_start,c->virtaddr);
+			}
+
+		}
+		else
+		{
+			LOGV ("[libEGL->VirtualGL] Could not open device.  Not ready/loaded?  Poop.\n");
+		}
+
+
 		c->token = 0;
 		c->seq =0;
 		c->surfaceCounter = 0;
@@ -2410,33 +2428,34 @@ void libvirtual_uninit(egl_context_t* c)
 {
 	if (c->gl_client_version == 2) {
 		// now send message to host to inform host context has been destroyed
-		// no payload as only information we need is the context id which is in the 
+		// no payload as only information we need is the context id which is in the
 		// header
 		LOGD("LIBVIRTUAL UNINIT\n");
 		command_control cmd;
 		// use the variation that we pass in the context, as it is no longer available from the
 		// thread local context
-		createEGLCommand(c, EGL_DESTROYCONTEXT, 0, cmd);
+		createEGLCommand(c, EGL_DESTROYCONTEXT, cmd);
 		sendCommand(c, (char*)&cmd, sizeof(command_control));
 		fflush(c->theVirtualDeviceFileDescriptor);
-		ioctl(c->theVirtualDeviceIOCTLDescriptor, VIRTUALDEVICE_IOCTL_SIGNAL_BUFFER_SYNC, c->surfaceCounter);
-
-		if (c->theVirtualDeviceIOCTLFileDescriptor)
-		{ 
-			/* Reset host. */
-			//ioctl(c->theVirtualDeviceIOCTLDescriptor, VIRTUALDEVICE_IOCTL_SYSTEM_RESET, 1);
-		}
+	
+		if (c->virtaddr) munmap(c->virtaddr, 16384);
 
 		if (c->theVirtualDeviceFileDescriptor)
-		{ 
+		{
 			fclose (c->theVirtualDeviceFileDescriptor);
 			c->theVirtualDeviceFileDescriptor = NULL;
 		}
 		if (c->theVirtualDeviceIOCTLFileDescriptor)
-		{ 
+		{
 			fclose (c->theVirtualDeviceIOCTLFileDescriptor);
 			c->theVirtualDeviceIOCTLFileDescriptor = NULL;
 		}
+		if (c->theVirtualDeviceExchangeFileDescriptor)
+		{
+			fclose (c->theVirtualDeviceExchangeFileDescriptor);
+			c->theVirtualDeviceExchangeFileDescriptor = NULL;
+		}
+
 
 	}
 }
