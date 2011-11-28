@@ -618,14 +618,11 @@ EGLBoolean egl_window_surface_v2_t::swapBuffers()
 	if (f->gl_client_version == 2 && f->theVirtualDeviceIOCTLFileDescriptor)
 	{
 
-		// Only send the surface information on the first two swaps, we don't need to send any more.
-		if (f->surfaceCounter < 2)
-		{
-			if(getSurfacePhysicalAddr(buffer,&phyaddr)!=NO_ERROR) return setError(EGL_BAD_ACCESS, EGL_FALSE);
-			// Send surface details.
-			SetSurfaceparam(f->theVirtualDeviceFileDescriptor, f->surfaceCounter, buffer->width, buffer->height, (uint32_t)phyaddr, 0, 0, 0, 0, buffer->stride);
-		    LOGV ("Sent surface details of surface: %d\n", f->surfaceCounter);
-		}
+		
+		if(getSurfacePhysicalAddr(buffer,&phyaddr)!=NO_ERROR) return setError(EGL_BAD_ACCESS, EGL_FALSE);
+		// Send surface details.
+		SetSurfaceparam(f->theVirtualDeviceFileDescriptor, f->surfaceCounter, buffer->width, buffer->height, (uint32_t)phyaddr, 0, 0, 0, 0, buffer->stride);
+		LOGV ("Sent surface details of surface: %d\n", f->surfaceCounter);
 		int surfaceNum = f->surfaceCounter & 1; // flip between 0 and 1
 		writeData(theSync, offset, &cmd,sizeof(command_control));
 		writeData(theSync, offset, &f->surfaceCounter,sizeof(GLuint));
@@ -2420,6 +2417,7 @@ void libvirtual_init(egl_context_t* c)
 		c->token = 0;
 		c->seq =0;
 		c->surfaceCounter = 0;
+		c->arrayBuffer = 0;
 	}
 
 }

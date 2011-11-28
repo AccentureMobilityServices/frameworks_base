@@ -272,12 +272,33 @@ void glUseProgram(GLuint program)
 // we can't send the data when we get this command as we don't know how big the array is before the DrawElements, DrawArray commands have
 // been issued
 void glVertexAttribPointer (GLuint indx, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const GLvoid* ptr){
+	LOGV("(%s)\n", __FUNCTION__);
+	LOGV("index %d\n", indx);
 	egl_context_t* c = getContext();
-	c->attribs[indx].size = size;
-	c->attribs[indx].type = type;
-	c->attribs[indx].normalized = normalized;
-	c->attribs[indx].stride = stride;
-	c->attribs[indx].pointer = ptr;
+	c->attribs[indx].arrayBuffer = c->arrayBuffer; // store whether bound to a buffer for all arrays
+	if (c->arrayBuffer ==0) { // only store the rest of the parameters if not bound to a buffer 
+		LOGV("not bound to buffer\n");
+		c->attribs[indx].size = size;
+		c->attribs[indx].type = type;
+		c->attribs[indx].normalized = normalized;
+		c->attribs[indx].stride = stride;
+		c->attribs[indx].pointer = ptr;
+	} else {
+		// send through pointer if bound to a buffer
+		LOGV("bound to buffer\n");
+		command_control cmd;
+		int offset =0;
+		createGLES2Command(GLVERTEXATTRIBPOINTER, cmd);
+		char buf[MAX_COMMAND_SIZE];
+		writeData(buf, offset, &cmd,sizeof(command_control));
+		writeData(buf, offset, &indx,sizeof(GLuint));
+		writeData(buf, offset, &size,sizeof(GLuint));
+		writeData(buf, offset, &type,sizeof(GLenum));
+		writeData(buf, offset, &normalized,sizeof(GLuint)); //GLboolean is a char, we want to write 32 bit words
+		writeData(buf, offset, &stride,sizeof(GLsizei));
+		writeData(buf, offset, &ptr,sizeof(GLint));
+		sendCommand(buf, offset);
+	}
 }
 
 
@@ -287,8 +308,9 @@ void sendVertexAttribData(int first, int count)
 	GLuint indx;
 	egl_context_t* c = getContext();
 	for (indx = 0; indx<MAX_ATTRIBS; indx++) {
-		// only send enabled pointers
-		if (c->attribs[indx].enabled) {
+		// only send enabled pointers and ones not bound to a buffer
+		if (c->attribs[indx].enabled && c->attribs[indx].arrayBuffer ==0) {
+			LOGV("Sending index %d\n", indx);
 			command_control cmd;
 			int offset = 0;
 			int len = 0;
@@ -321,6 +343,7 @@ void sendVertexAttribData(int first, int count)
 			LOGV("sendVertexAttribData len %d\n", len);
 			GLint length = count * len;
 			LOGV("sendVertexAttribData count %d length %d\n", count, length);
+			LOGV("sendVertexAttribData pointer 0x%08x\n", c->attribs[indx].pointer);
 
 			// most of the time the attribute data hasn't changed, so compare the crc with the crc of the data we last sent
 
@@ -338,7 +361,7 @@ void sendVertexAttribData(int first, int count)
 				c->attribs[indx].lastSentCount = length;
 				c->attribs[indx].lastSentCrc32 = crc;
 				// host interprets sending the data as enable too
-				createGLES2Command(GLVERTEXATTRIBPOINTER, cmd);
+				createGLES2Command(SENDVERTEXATTRIBPOINTERDATA, cmd);
 				char buf[MAX_COMMAND_SIZE];
 				if (c->theVirtualDeviceFileDescriptor)
 				{
@@ -351,16 +374,6 @@ void sendVertexAttribData(int first, int count)
 					writeData(buf, offset, &length,sizeof(GLint));
 					sendCommandDataWithHeader(buf, offset, (GLvoid*)((char*)c->attribs[indx].pointer +(len*first)), length);
 				}
-			} else {
-				// if data already on the host - just send enable
-				createGLES2Command(GLENABLEVERTEXATTRIBARRAY, cmd);
-				char buf[MAX_COMMAND_SIZE];
-				if (c->theVirtualDeviceFileDescriptor)
-				{
-					writeData(buf, offset, &cmd,sizeof(command_control));
-					writeData(buf, offset, &indx,sizeof(GLuint));
-					sendCommand(buf, offset);
-				}
 			}
 		}
 	}
@@ -371,6 +384,13 @@ void glEnableVertexAttribArray(GLuint index)
 
 	egl_context_t* c = getContext();
 	c->attribs[index].enabled = true;
+	command_control cmd;
+	int offset =0;
+	createGLES2Command(GLENABLEVERTEXATTRIBARRAY, cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd,sizeof(command_control));
+	writeData(buf, offset, &index,sizeof(GLuint));
+	sendCommand(buf, offset);
 
 }
 
@@ -1088,8 +1108,16 @@ GLenum glCheckFramebufferStatus(GLenum target)
 }
 void glBindBuffer(GLenum target, GLuint buffer)
 {
+	LOGV("(%s)\n", __FUNCTION__);
     command_control cmd;
     egl_context_t* c = getContext();
+	LOGV("target 0x%04x  buffer %d \n",target, buffer);
+	switch(target){
+		case GL_ARRAY_BUFFER: 
+			c->arrayBuffer = buffer;
+			LOGV("%d array buffer bound\n",buffer);
+			break;
+	}
     int offset = 0;
     createGLES2Command(GLBINDBUFFER, cmd);
     char buf[MAX_COMMAND_SIZE];
@@ -1326,6 +1354,13 @@ void glDisableVertexAttribArray(GLuint index)
 
 	egl_context_t* c = getContext();
 	c->attribs[index].enabled = false;
+	command_control cmd;
+	int offset = 0;
+	createGLES2Command(GLDISABLEVERTEXATTRIBARRAY, cmd);
+	char buf[MAX_COMMAND_SIZE];
+	writeData(buf, offset, &cmd,sizeof(command_control));
+	writeData(buf, offset, &index,sizeof(GLuint));
+	sendCommand(buf, offset);
 }
 void glFramebufferRenderbuffer(GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer)
 {
@@ -2105,8 +2140,8 @@ void glTexImage2D (GLenum target, GLint level, GLint internalformat, GLsizei wid
 	if (pixels != NULL) {
  		size = width*height*getDataSize(type)*getDataFormatSize(format);
 	}
-        createGLES2Command(GLTEXIMAGE2D,cmd);
-        char buf[MAX_COMMAND_SIZE];
+	createGLES2Command(GLTEXIMAGE2D,cmd);
+	char buf[MAX_COMMAND_SIZE];
 	writeData(buf, offset, &cmd, sizeof(command_control));
 	writeUint32(buf, offset, target);
 	writeUint32(buf, offset, level);

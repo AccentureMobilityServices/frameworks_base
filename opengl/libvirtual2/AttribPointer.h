@@ -18,6 +18,7 @@
 #define ATTRIBPOINTER_H
 namespace android {
 struct AttribPointer {
+	int 		arrayBuffer;
 	GLint  		size;
  	GLenum  	type;
  	GLuint  	normalized; //don't want byte sized values for data sending - so replace GLboolean with GLuint

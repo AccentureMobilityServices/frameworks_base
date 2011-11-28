@@ -39,6 +39,7 @@ struct egl_context_t {
 	/* ++ libvirtual2 additions ++ */
 	int token;
 	AttribPointer* attribs;
+	int arrayBuffer;
 	FILE *theVirtualDeviceFileDescriptor;
 	FILE *theVirtualDeviceIOCTLFileDescriptor;
 	FILE *theVirtualDeviceExchangeFileDescriptor;
